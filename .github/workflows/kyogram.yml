@@ -1,0 +1,58 @@
+name: Kyogram APK
+
+# Builds the native Kyogram (this fork of Telegram for Android) as one APK for arm64 phones. The API
+# keys come from the repository's secrets (TELEGRAM_APP_ID, TELEGRAM_APP_HASH) and are written into
+# BuildVars.java only on the build machine; they are never committed.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - name: Make room
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android NDK and CMake
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "cmake;3.22.1" "platforms;android-36" "build-tools;36.0.0" > /dev/null
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+
+      - name: API keys
+        env:
+          APP_ID: ${{ secrets.TELEGRAM_APP_ID }}
+          APP_HASH: ${{ secrets.TELEGRAM_APP_HASH }}
+        run: |
+          if [ -z "$APP_ID" ] || [ -z "$APP_HASH" ]; then echo "Add TELEGRAM_APP_ID and TELEGRAM_APP_HASH to the repository's secrets"; exit 1; fi
+          f=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
+          sed -i -E "s/public static int APP_ID = [0-9]+;/public static int APP_ID = $APP_ID;/" "$f"
+          sed -i -E "s/public static String APP_HASH = \"[0-9a-f]+\";/public static String APP_HASH = \"$APP_HASH\";/" "$f"
+          grep -q "APP_ID = $APP_ID;" "$f"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: |
+          sed -i -E "s/^APP_VERSION_CODE=.*/APP_VERSION_CODE=$((7400 + GITHUB_RUN_NUMBER))/" gradle.properties
+          chmod +x gradlew
+          ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx10g -XX:MaxMetaspaceSize=1g" :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kyogram-native-apk
+          path: TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
