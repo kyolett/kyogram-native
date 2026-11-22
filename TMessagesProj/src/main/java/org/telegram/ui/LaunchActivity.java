@@ -403,6 +403,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        kyogramSmallestWidth = getResources().getConfiguration().smallestScreenWidthDp;
         isActive = true;
         activeInstanceCount++;
         if (BuildVars.DEBUG_VERSION) {
@@ -7372,7 +7373,14 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     @Override
+    private int kyogramSmallestWidth = -1;
+
     public void onConfigurationChanged(Configuration newConfig) {
+        // * Kyogram: from the cover screen to the big one, the opening half clears as on the iPhone Duo
+        if (kyogramSmallestWidth >= 0 && kyogramSmallestWidth < 600 && newConfig.smallestScreenWidthDp >= 600) {
+            org.telegram.ui.Components.KyogramFoldReveal.show(this);
+        }
+        kyogramSmallestWidth = newConfig.smallestScreenWidthDp;
         AndroidUtilities.checkDisplaySize(this, newConfig);
         orientationController.update();
         AndroidUtilities.setPreferredMaxRefreshRate(getWindow());
