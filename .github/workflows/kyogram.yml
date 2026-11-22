@@ -1,16 +1,25 @@
 name: Kyogram APK
 
-# Builds the native Kyogram (this fork of Telegram for Android) as one APK for arm64 phones. The API
-# keys come from the repository's secrets (TELEGRAM_APP_ID, TELEGRAM_APP_HASH) and are written into
-# BuildVars.java only on the build machine; they are never committed.
+# Builds the native Kyogram (this fork of Telegram for Android): "standalone" is the phone app (arm64),
+# "keypad" is Kyogram Keypad for the docomo SH-02L flip phone (32-bit ARM), packed with adb and an
+# install script. The API keys come from the repository's secrets (TELEGRAM_APP_ID, TELEGRAM_APP_HASH)
+# and are written into BuildVars.java only on the build machine; they are never committed.
 
 on:
   workflow_dispatch:
+    inputs:
+      app:
+        description: Which app
+        type: choice
+        options: [keypad, standalone]
+        default: keypad
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    env:
+      APP: ${{ inputs.app || 'keypad' }}
     steps:
       - name: Make room
         run: |
@@ -21,6 +30,19 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+
+      - name: Old dates on the native sources
+        # * so the native build restored from the cache below counts as up to date and isn't redone
+        run: find TMessagesProj/jni -type f -exec touch -d '2001-01-01' {} +
+
+      - name: Native build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            TMessagesProj/.cxx
+            TMessagesProj/build/intermediates/cxx
+          key: cxx-${{ env.APP }}-${{ hashFiles('TMessagesProj/jni/**/*.c', 'TMessagesProj/jni/**/*.cpp', 'TMessagesProj/jni/**/*.h', 'TMessagesProj/jni/**/CMakeLists.txt') }}
+          restore-keys: cxx-${{ env.APP }}-
 
       - uses: actions/setup-java@v4
         with:
@@ -50,9 +72,50 @@ jobs:
         run: |
           sed -i -E "s/^APP_VERSION_CODE=.*/APP_VERSION_CODE=$((7400 + GITHUB_RUN_NUMBER))/" gradle.properties
           chmod +x gradlew
-          ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx10g -XX:MaxMetaspaceSize=1g" :TMessagesProj_AppStandalone:assembleAfatStandalone --stacktrace
+          if [ "$APP" = keypad ]; then task=:TMessagesProj_AppKeypad:assembleAfatStandalone; else task=:TMessagesProj_AppStandalone:assembleAfatStandalone; fi
+          ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx10g -XX:MaxMetaspaceSize=1g" "$task" --stacktrace
+
+      - name: Pack
+        run: |
+          mkdir -p out
+          if [ "$APP" = keypad ]; then
+            apk=$(find TMessagesProj_AppKeypad/build/outputs/apk -name '*.apk' | head -1)
+            mkdir -p "out/Kyogram Keypad/adb"
+            cp "$apk" "out/Kyogram Keypad/Kyogram-Keypad.apk"
+            curl -fsSL -o pt.zip https://dl.google.com/android/repository/platform-tools-latest-windows.zip
+            unzip -q pt.zip
+            cp platform-tools/adb.exe platform-tools/AdbWinApi.dll platform-tools/AdbWinUsbApi.dll "out/Kyogram Keypad/adb/"
+            printf '%s\r\n' \
+              '@echo off' \
+              'title Install Kyogram Keypad' \
+              'cd /d "%~dp0"' \
+              'echo.' \
+              'echo  Kyogram Keypad installer' \
+              'echo  ------------------------' \
+              'echo  1. Plug the phone into this PC with a USB cable.' \
+              'echo  2. On the phone, allow USB debugging for this computer if it asks.' \
+              'echo.' \
+              'echo  Waiting for the phone...' \
+              'adb\adb.exe wait-for-device' \
+              'echo  Phone found. Installing...' \
+              'adb\adb.exe install -r -d "Kyogram-Keypad.apk"' \
+              'if errorlevel 1 (' \
+              '  echo.' \
+              '  echo  Install failed. Check the message above.' \
+              ') else (' \
+              '  echo.' \
+              '  echo  Done. Opening Kyogram Keypad on the phone...' \
+              '  adb\adb.exe shell monkey -p app.kyogram.keypad -c android.intent.category.LAUNCHER 1 >nul 2>&1' \
+              ')' \
+              'adb\adb.exe kill-server >nul 2>&1' \
+              'echo.' \
+              'pause' > "out/Kyogram Keypad/install.cmd"
+          else
+            cp $(find TMessagesProj_AppStandalone/build/outputs/apk -name '*.apk' | head -1) out/Kyogram.apk
+          fi
+          ls -R out
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Kyogram-native-apk
-          path: TMessagesProj_AppStandalone/build/outputs/apk/**/*.apk
+          name: ${{ env.APP == 'keypad' && 'Kyogram-Keypad' || 'Kyogram-native-apk' }}
+          path: out/

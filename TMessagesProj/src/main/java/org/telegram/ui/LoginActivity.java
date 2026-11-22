@@ -1709,6 +1709,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         MediaDataController.getInstance(currentAccount).loadStickersByEmojiOrName(AndroidUtilities.STICKERS_PLACEHOLDER_PACK_NAME, false, true);
 
         needFinishActivity(afterSignup, res.setup_password_required, res.otherwise_relogin_days);
+        // * Kyogram Keypad: signed in, so on to its own screens
+        AndroidUtilities.runOnUIThread(() -> BuildVars.openKeypad(getParentActivity(), null), 300);
     }
 
     private void fillNextCodeParams(Bundle params, TL_account.sentEmailCode res) {

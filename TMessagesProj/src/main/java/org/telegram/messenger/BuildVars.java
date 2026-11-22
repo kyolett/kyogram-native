@@ -83,6 +83,29 @@ public class BuildVars {
     }
 
     private static Boolean betaApp;
+    /** Kyogram Keypad (the flip phone build): its own screens, with Telegram's only for signing in. */
+    public static boolean isKeypadApp() {
+        return ApplicationLoader.applicationContext != null && ApplicationLoader.applicationContext.getPackageName().endsWith(".keypad");
+    }
+
+    /** Opens Kyogram Keypad's screens, passing on which chat to show (from a notification). */
+    public static boolean openKeypad(android.app.Activity from, android.content.Intent source) {
+        if (!isKeypadApp() || from == null) {
+            return false;
+        }
+        android.content.Intent intent = new android.content.Intent();
+        intent.setClassName(from, "app.kyogram.keypad.KeypadActivity");
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        if (source != null) {
+            long userId = source.getLongExtra("userId", 0), chatId = source.getLongExtra("chatId", 0);
+            if (userId != 0) intent.putExtra("dialogId", userId);
+            else if (chatId != 0) intent.putExtra("dialogId", -chatId);
+        }
+        from.startActivity(intent);
+        from.finish();
+        return true;
+    }
+
     public static boolean isBetaApp() {
         if (betaApp == null) {
             betaApp = ApplicationLoader.applicationContext != null && "org.telegram.messenger.beta".equals(ApplicationLoader.applicationContext.getPackageName());

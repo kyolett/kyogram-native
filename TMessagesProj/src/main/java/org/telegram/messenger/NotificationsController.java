@@ -4601,6 +4601,9 @@ public class NotificationsController extends BaseController implements Notificat
             }
 
             Intent intent = new Intent(ApplicationLoader.applicationContext, LaunchActivity.class);
+            if (BuildVars.isKeypadApp()) {
+                intent.setClassName(ApplicationLoader.applicationContext, "app.kyogram.keypad.KeypadActivity"); // * Kyogram Keypad opens the chat itself
+            }
             intent.setAction("com.tmessages.openchat" + Math.random() + Integer.MAX_VALUE);
             intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
             if (lastMessageObject != null && lastMessageObject.isOauthPush) {
@@ -5574,6 +5577,9 @@ public class NotificationsController extends BaseController implements Notificat
             }
 
             Intent intent = new Intent(ApplicationLoader.applicationContext, LaunchActivity.class);
+            if (BuildVars.isKeypadApp()) {
+                intent.setClassName(ApplicationLoader.applicationContext, "app.kyogram.keypad.KeypadActivity"); // * Kyogram Keypad opens the chat itself
+            }
             intent.setAction("com.tmessages.openchat" + Math.random() + Integer.MAX_VALUE);
             intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
             intent.addCategory(Intent.CATEGORY_LAUNCHER);
