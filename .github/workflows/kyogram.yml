@@ -36,12 +36,13 @@ jobs:
         run: find TMessagesProj/jni -type f -exec touch -d '2001-01-01' {} +
 
       - name: Native build cache
-        uses: actions/cache@v4
+        id: cxx
+        uses: actions/cache/restore@v4
         with:
           path: |
             TMessagesProj/.cxx
             TMessagesProj/build/intermediates/cxx
-          key: cxx-${{ env.APP }}-${{ hashFiles('TMessagesProj/jni/**/*.c', 'TMessagesProj/jni/**/*.cpp', 'TMessagesProj/jni/**/*.h', 'TMessagesProj/jni/**/CMakeLists.txt') }}
+          key: cxx-${{ env.APP }}-${{ github.run_id }}
           restore-keys: cxx-${{ env.APP }}-
 
       - uses: actions/setup-java@v4
@@ -74,6 +75,16 @@ jobs:
           chmod +x gradlew
           if [ "$APP" = keypad ]; then task=:TMessagesProj_AppKeypad:assembleAfatStandalone; else task=:TMessagesProj_AppStandalone:assembleAfatStandalone; fi
           ./gradlew --no-daemon -Dorg.gradle.jvmargs="-Xmx10g -XX:MaxMetaspaceSize=1g" "$task" --stacktrace
+
+      - name: Save the native build
+        # * saved even when the Java part fails, so the next try skips the long native build
+        if: always() && steps.cxx.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            TMessagesProj/.cxx
+            TMessagesProj/build/intermediates/cxx
+          key: cxx-${{ env.APP }}-${{ github.run_id }}
 
       - name: Pack
         run: |

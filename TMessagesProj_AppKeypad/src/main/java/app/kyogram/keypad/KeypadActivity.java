@@ -144,7 +144,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
         root.setBackgroundColor(Style.BASE);
         setContentView(root);
 
-        for (int e : events()) mc.getNotificationCenter().addObserver(this, e);
+        for (int e : events()) NotificationCenter.getInstance(account).addObserver(this, e);
         mc.loadDialogs(0, 0, 100, true);
     }
 
@@ -156,7 +156,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (mc != null) for (int e : events()) mc.getNotificationCenter().removeObserver(this, e);
+        if (mc != null) for (int e : events()) NotificationCenter.getInstance(account).removeObserver(this, e);
     }
 
     @Override
