@@ -7372,9 +7372,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         return orientationController;
     }
 
-    @Override
     private int kyogramSmallestWidth = -1;
 
+    @Override
     public void onConfigurationChanged(Configuration newConfig) {
         // * Kyogram: from the cover screen to the big one, the opening half clears as on the iPhone Duo
         if (kyogramSmallestWidth >= 0 && kyogramSmallestWidth < 600 && newConfig.smallestScreenWidthDp >= 600) {

@@ -70,8 +70,8 @@
             android:enabled="false"
             android:name="org.telegram.messenger.VintageIcon"
             android:targetActivity="org.telegram.ui.LaunchActivity"
-            android:icon="@mipmap/icon_6_launcher_sa"
-            android:roundIcon="@mipmap/icon_6_launcher_sa"
+            android:icon="@mipmap/ic_kyogram"
+            android:roundIcon="@mipmap/ic_kyogram"
             android:exported="true"
             tools:node="replace">
 
@@ -86,8 +86,8 @@
             android:enabled="false"
             android:name="org.telegram.messenger.AquaIcon"
             android:targetActivity="org.telegram.ui.LaunchActivity"
-            android:icon="@mipmap/icon_4_launcher_sa"
-            android:roundIcon="@mipmap/icon_4_launcher_sa"
+            android:icon="@mipmap/ic_kyogram"
+            android:roundIcon="@mipmap/ic_kyogram"
             android:exported="true"
             tools:node="replace">
 
@@ -102,8 +102,8 @@
             android:enabled="false"
             android:name="org.telegram.messenger.PremiumIcon"
             android:targetActivity="org.telegram.ui.LaunchActivity"
-            android:icon="@mipmap/icon_3_launcher_sa"
-            android:roundIcon="@mipmap/icon_3_launcher_sa"
+            android:icon="@mipmap/ic_kyogram"
+            android:roundIcon="@mipmap/ic_kyogram"
             android:exported="true"
             tools:node="replace">
 
@@ -118,8 +118,8 @@
             android:enabled="false"
             android:name="org.telegram.messenger.TurboIcon"
             android:targetActivity="org.telegram.ui.LaunchActivity"
-            android:icon="@mipmap/icon_5_launcher_sa"
-            android:roundIcon="@mipmap/icon_5_launcher_sa"
+            android:icon="@mipmap/ic_kyogram"
+            android:roundIcon="@mipmap/ic_kyogram"
             android:exported="true"
             tools:node="replace">
 
@@ -134,8 +134,8 @@
             android:enabled="false"
             android:name="org.telegram.messenger.NoxIcon"
             android:targetActivity="org.telegram.ui.LaunchActivity"
-            android:icon="@mipmap/icon_2_launcher_sa"
-            android:roundIcon="@mipmap/icon_2_launcher_sa"
+            android:icon="@mipmap/ic_kyogram"
+            android:roundIcon="@mipmap/ic_kyogram"
             android:exported="true"
             tools:node="replace">
 
