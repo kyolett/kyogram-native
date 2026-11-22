@@ -31,7 +31,7 @@ public class SoftKeysView extends View {
     private final float[] flash = {0, 0, 0};
 
     private final Style.Glass glass = new Style.Glass();
-    private final TextPaint sidePaint = Style.text(Style.semibold, 21, Color.argb(224, 255, 255, 255));
+    private final TextPaint sidePaint = Style.text(Style.semibold, 21, Style.fg(224));
     private final TextPaint okPaint = Style.text(Style.bold, 21, Color.WHITE);
     private final Paint okFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint okEdge = new Paint(Paint.ANTI_ALIAS_FLAG);

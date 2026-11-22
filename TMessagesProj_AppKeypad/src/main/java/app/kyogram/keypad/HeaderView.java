@@ -137,7 +137,7 @@ public class HeaderView extends GlassFrame {
         float fade = 1, lift;
         private final TextPaint title = Style.text(Style.display, 27, Style.INK);
         private final TextPaint tab = Style.text(Style.semibold, 18, Style.INK);
-        private final TextPaint icon = Style.text(Style.regular, 22, Color.argb(179, 255, 255, 255));
+        private final TextPaint icon = Style.text(Style.regular, 22, Style.fg(179));
         private final Paint box = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint glide = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint glideRim = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -145,7 +145,7 @@ public class HeaderView extends GlassFrame {
 
         Content(Context context) {
             super(context);
-            box.setColor(Color.argb(18, 255, 255, 255));
+            box.setColor(Style.fg(18));
             glide.setColor(Color.argb(46, 255, 255, 255));
             glideRim.setStyle(Paint.Style.STROKE);
             glideRim.setStrokeWidth(Style.px(1.5f));

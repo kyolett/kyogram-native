@@ -65,10 +65,10 @@ public class ThreadView extends View {
 
     private final TextPaint textPaint = Style.text(Style.regular, 21, Style.INK);
     private final TextPaint whoPaint = Style.text(Style.bold, 17, Style.WARN);
-    private final TextPaint timeIn = Style.text(Style.regular, 14, Color.argb(140, 255, 255, 255));
+    private final TextPaint timeIn = Style.text(Style.regular, 14, Style.fg(140));
     private final TextPaint timeOut = Style.text(Style.regular, 14, Color.argb(199, 255, 255, 255));
     private final TextPaint quotePaint = Style.text(Style.regular, 16, Style.INK);
-    private final TextPaint dayPaint = Style.text(Style.semibold, 15, Color.argb(179, 255, 255, 255));
+    private final TextPaint dayPaint = Style.text(Style.semibold, 15, Style.fg(179));
     private final Paint inFill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint inRim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint outFill = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -93,15 +93,15 @@ public class ThreadView extends View {
         ringW = new Spring(0, 420, 32, (v, vel) -> invalidate());
         ringH = new Spring(0, 420, 32, (v, vel) -> invalidate());
         ringFade = new Spring(0, 400, 40, (v, vel) -> { ringAlpha = v; invalidate(); });
-        inFill.setColor(Color.argb(153, 30, 27, 48));
+        inFill.setColor(Style.day ? Color.argb(184, 255, 255, 255) : Color.argb(153, 30, 27, 48));
         inRim.setStyle(Paint.Style.STROKE);
         inRim.setStrokeWidth(Style.px(1.5f));
         inRim.setColor(Color.argb(46, 255, 255, 255));
         outEdge.setColor(Color.argb(89, 255, 255, 255));
         outGlow.setColor(Color.argb(77, 139, 116, 242));
-        quoteFill.setColor(Color.argb(36, 255, 255, 255));
+        quoteFill.setColor(Style.fg(36));
         quoteBar.setColor(Color.argb(179, 255, 255, 255));
-        dayFill.setColor(Color.argb(26, 255, 255, 255));
+        dayFill.setColor(Style.fg(26));
         ringPaint.setStyle(Paint.Style.STROKE);
         ringPaint.setStrokeWidth(Style.px(2.5f));
         ringPaint.setColor(Color.WHITE);

@@ -35,7 +35,7 @@ public class MenuView extends View {
     private final Spring pillY;
     private float stretch;
     private final Style.Pill pill = new Style.Pill(false);
-    private final TextPaint title = Style.text(Style.display, 22, Color.argb(191, 255, 255, 255));
+    private final TextPaint title = Style.text(Style.display, 22, Style.fg(191));
     private final TextPaint label = Style.text(Style.semibold, 23, Style.INK);
     private final TextPaint key = Style.text(Style.bold, 19, Style.INK);
     private final TextPaint icon = Style.text(Style.bold, 22, Color.WHITE);
@@ -106,9 +106,9 @@ public class MenuView extends View {
             float k = i < keyK.length ? keyK[i] : 0;
             float ks = Style.px(38), kx = Style.px(16);
             fill.setShader(null);
-            fill.setColor(blend(Color.argb(36, 255, 255, 255), Color.WHITE, k));
+            fill.setColor(blend(Style.fg(36), Style.day ? Style.ACCENT : Color.WHITE, k));
             c.drawCircle(kx + ks / 2f, cy, ks / 2f, fill);
-            key.setColor(blend(Style.INK, Style.KEY_INK, k));
+            key.setColor(blend(Style.INK, Style.day ? Color.WHITE : Style.KEY_INK, k));
             String n = String.valueOf(i + 1);
             Paint.FontMetrics km = key.getFontMetrics();
             c.drawText(n, kx + (ks - key.measureText(n)) / 2f, cy - (km.ascent + km.descent) / 2f, key);

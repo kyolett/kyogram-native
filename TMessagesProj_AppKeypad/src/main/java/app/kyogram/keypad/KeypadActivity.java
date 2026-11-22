@@ -128,6 +128,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
         mc = MessagesController.getInstance(account);
         prefs = getSharedPreferences("kyogram_keypad", MODE_PRIVATE);
         Spring.reduced = prefs.getBoolean("reducedMotion", false);
+        Style.theme(prefs.getBoolean("day", false), prefs.getString("tint", "candy"));
 
         Window win = getWindow();
         win.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN);
@@ -203,6 +204,11 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
         sb = res > 0 ? getResources().getDimensionPixelSize(res) : (int) (24 * getResources().getDisplayMetrics().density);
         Style.init(this, W, H, sb);
         root.removeAllViews();
+        root.setBackgroundColor(Style.BASE);
+        int ui = View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN;
+        if (Style.day) ui |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        getWindow().getDecorView().setSystemUiVisibility(ui);
+        getWindow().setNavigationBarColor(Style.BASE);
 
         root.addView(new WallView(this), new FrameLayout.LayoutParams(-1, -1));
 
@@ -262,7 +268,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
         input = new EditText(this);
         input.setBackground(null);
         input.setTextColor(Style.INK);
-        input.setHintTextColor(Color.argb(140, 255, 255, 255));
+        input.setHintTextColor(Style.fg(140));
         input.setHint("Write a message…");
         input.setTypeface(Style.medium);
         input.setTextSize(TypedValue.COMPLEX_UNIT_PX, Style.px(20));
@@ -280,7 +286,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
         mode.setText("abc");
         mode.setPadding(px(10), px(5), px(10), px(5));
         android.graphics.drawable.GradientDrawable modeBg = new android.graphics.drawable.GradientDrawable();
-        modeBg.setColor(Color.argb(36, 255, 255, 255));
+        modeBg.setColor(Style.fg(36));
         modeBg.setCornerRadius(px(10));
         mode.setBackground(modeBg);
         FrameLayout.LayoutParams mlp = new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_VERTICAL | Gravity.RIGHT);
@@ -759,8 +765,8 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
                 pageHead.setTile("⚙", "#c0c0d0", "#80809a", "Settings", "Kyogram Keypad");
                 TLRPC.User me = UserConfig.getInstance(account).getCurrentUser();
                 items.add(setting(3000, "Motion", Spring.reduced ? "Reduced" : "Full"));
-                items.add(setting(3001, "Theme", "Night"));
-                items.add(setting(3002, "Glass tint", "Candy"));
+                items.add(setting(3001, "Theme", Style.day ? "Day" : "Night"));
+                items.add(setting(3002, "Glass tint", Character.toUpperCase(Style.tint.charAt(0)) + Style.tint.substring(1)));
                 items.add(setting(3003, "Account", me != null && !TextUtils.isEmpty(me.username) ? "@" + me.username : me != null ? UserObject.getUserName(me) : ""));
                 items.add(setting(3004, "Version", "Keypad " + org.telegram.messenger.BuildVars.BUILD_VERSION_STRING));
                 break;
@@ -851,6 +857,24 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
             Spring.reduced = !Spring.reduced;
             prefs.edit().putBoolean("reducedMotion", Spring.reduced).apply();
             openPageAgain();
+        } else if ("settings".equals(page) && (it.id == 3001 || it.id == 3002)) {
+            // * Theme flips Night/Day; Glass tint steps Candy → Ocean → Sunset → Mono; everything repaints
+            String[] tints = {"candy", "ocean", "sunset", "mono"};
+            boolean d = Style.day;
+            String t = Style.tint;
+            if (it.id == 3001) d = !d;
+            else {
+                int i = 0;
+                for (int k = 0; k < tints.length; k++) if (tints[k].equals(t)) i = k;
+                t = tints[(i + 1) % tints.length];
+            }
+            prefs.edit().putBoolean("day", d).putString("tint", t).apply();
+            Style.theme(d, t);
+            long focusId = it.id;
+            build();
+            openPage("settings");
+            pushP.to(1, true);
+            for (ChatListView.Item i : pageList.items()) if (i.id == focusId) pageList.focusItem(i, true);
         } else if ("new".equals(page)) {
             long did = it.id;
             closePage();

@@ -31,15 +31,47 @@ public final class Style {
     public static float u = 1f;
     public static int statusBar;
 
-    public static final int INK = Color.parseColor("#f6f4ff");
-    public static final int INK2 = Color.argb(158, 246, 244, 255); // .62
-    public static final int INK3 = Color.argb(107, 246, 244, 255); // .42
+    public static int INK = Color.parseColor("#f6f4ff");
+    public static int INK2 = Color.argb(158, 246, 244, 255); // .62
+    public static int INK3 = Color.argb(107, 246, 244, 255); // .42
     public static final int ACCENT = Color.parseColor("#8b74f2");
     public static final int ACCENT_HI = Color.parseColor("#ad9cff");
     public static final int DANGER = Color.parseColor("#ff7a7a");
     public static final int OK = Color.parseColor("#7fe0a8");
     public static final int WARN = Color.parseColor("#ffbf6a");
-    public static final int BASE = Color.parseColor("#15121c");
+    public static int BASE = Color.parseColor("#15121c");
+
+    /** Settings → Theme (Night / Day) and Glass tint (the desktop's palettes, _kyogramGlass.scss). */
+    public static boolean day;
+    public static String tint = "candy";
+    private static String paintedFor;
+
+    /** Text-coloured ink at an alpha (white at night, near-black by day). */
+    public static int fg(int alpha) {
+        return day ? Color.argb(alpha, 29, 26, 38) : Color.argb(alpha, 255, 255, 255);
+    }
+
+    public static void theme(boolean isDay, String glassTint) {
+        day = isDay;
+        tint = glassTint != null ? glassTint : "candy";
+        INK = day ? Color.parseColor("#1d1a26") : Color.parseColor("#f6f4ff");
+        INK2 = day ? Color.argb(158, 29, 26, 38) : Color.argb(158, 246, 244, 255);
+        INK3 = day ? Color.argb(115, 29, 26, 38) : Color.argb(107, 246, 244, 255);
+    }
+
+    /** b1..b4 and the base, night and day, per tint. */
+    private static int[] palette() {
+        switch (tint + (day ? "-day" : "")) {
+            case "ocean": return new int[]{Color.argb(217, 30, 90, 160), Color.argb(204, 40, 60, 150), Color.argb(128, 20, 120, 130), Color.argb(128, 60, 90, 170), Color.parseColor("#0f1520")};
+            case "sunset": return new int[]{Color.argb(204, 170, 70, 60), Color.argb(191, 150, 50, 110), Color.argb(115, 160, 110, 40), Color.argb(128, 170, 80, 90), Color.parseColor("#1b1214")};
+            case "mono": return new int[]{Color.argb(153, 90, 90, 104), Color.argb(153, 70, 72, 86), Color.argb(89, 100, 100, 110), Color.argb(102, 80, 80, 95), Color.parseColor("#121214")};
+            case "candy-day": return new int[]{Color.parseColor("#ffb4d6"), Color.parseColor("#b9c8ff"), Color.parseColor("#c8f2df"), Color.parseColor("#ffe1b8"), Color.parseColor("#f6f1fb")};
+            case "ocean-day": return new int[]{Color.parseColor("#9fd8ff"), Color.parseColor("#b8c6ff"), Color.parseColor("#bff3ea"), Color.parseColor("#d6f0ff"), Color.parseColor("#eef6fb")};
+            case "sunset-day": return new int[]{Color.parseColor("#ffb39b"), Color.parseColor("#ffc9e0"), Color.parseColor("#ffe3a8"), Color.parseColor("#ffd0b0"), Color.parseColor("#fff4ee")};
+            case "mono-day": return new int[]{Color.parseColor("#e3e3ea"), Color.parseColor("#d7d9e2"), Color.parseColor("#eceef2"), Color.parseColor("#e6e3ea"), Color.parseColor("#f4f4f6")};
+            default: return new int[]{Color.argb(242, 122, 58, 143), Color.argb(230, 44, 78, 168), Color.argb(128, 31, 122, 98), Color.argb(140, 150, 70, 110), Color.parseColor("#15121c")};
+        }
+    }
     public static final int KEY_INK = Color.parseColor("#2a2340");
 
     public static Typeface regular, medium, semibold, bold, display;
@@ -64,7 +96,9 @@ public final class Style {
             bold = font(context, "Inter-Bold.otf", Typeface.BOLD);
             display = font(context, "InterDisplay-Bold.otf", Typeface.BOLD);
         }
-        if (wall == null || wall.getWidth() != width || wall.getHeight() != height) {
+        String key = tint + day + width + "x" + height;
+        if (wall == null || !key.equals(paintedFor)) {
+            paintedFor = key;
             paintWall(width, height);
         }
     }
@@ -91,12 +125,14 @@ public final class Style {
     private static void paintWall(int w, int h) {
         wall = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(wall);
+        int[] pal = palette();
+        BASE = pal[4];
         c.drawColor(BASE);
         // * CSS draws the first gradient on top, so paint them last to first
-        blob(c, w, h, .92f, .08f, Color.argb(140, 150, 70, 110), .28f);
-        blob(c, w, h, .62f, .48f, Color.argb(128, 31, 122, 98), .32f);
-        blob(c, w, h, .96f, .96f, Color.argb(230, 44, 78, 168), .46f);
-        blob(c, w, h, .08f, .06f, Color.argb(242, 122, 58, 143), .38f);
+        blob(c, w, h, .92f, .08f, pal[3], .28f);
+        blob(c, w, h, .62f, .48f, pal[2], .32f);
+        blob(c, w, h, .96f, .96f, pal[1], .46f);
+        blob(c, w, h, .08f, .06f, pal[0], .38f);
 
         // * the frost: small, blurred (CSS blur(18px)) and saturated (saturate(1.5)), scaled back up when drawn
         frostScale = 6f;
@@ -149,9 +185,9 @@ public final class Style {
             this.shadowColor = shadowColor;
             this.shadowY = shadowY;
             this.shadowBlur = shadowBlur;
-            tint.setColor(Color.argb(140, 40, 36, 60));
+            tint.setColor(day ? Color.argb(140, 255, 255, 255) : Color.argb(140, 40, 36, 60));
             rim.setStyle(Paint.Style.STROKE);
-            rim.setColor(Color.argb(56, 255, 255, 255));
+            rim.setColor(day ? Color.argb(204, 255, 255, 255) : Color.argb(56, 255, 255, 255));
             top.setColor(Color.argb(102, 255, 255, 255));
         }
 
@@ -161,7 +197,7 @@ public final class Style {
             this.h = h;
             this.radius = radius;
             rect.set(0, 0, w, h);
-            sheen.setShader(new LinearGradient(0, 0, 0, h * .6f, Color.argb(41, 255, 255, 255), 0x00ffffff, Shader.TileMode.CLAMP));
+            sheen.setShader(new LinearGradient(0, 0, 0, h * .6f, Color.argb(day ? 153 : 41, 255, 255, 255), 0x00ffffff, Shader.TileMode.CLAMP));
             rim.setStrokeWidth(px(1.5f));
             Path outer = new Path();
             outer.addRoundRect(rect, radius, radius, Path.Direction.CW);
