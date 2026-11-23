@@ -438,8 +438,8 @@ public class ChatListView extends View {
         if (it.o < .999f) c.saveLayerAlpha(-Style.px(20), -Style.px(20), w + Style.px(20), h + Style.px(20), (int) (255 * it.o));
         // * the row in focus grows a little; on a wide list, by the same few pixels as on a narrow one, so its
         // * text stays inside the pill
-        float sc = 1 + (it.scale - 1) * Math.min(1f, Style.px(540) / Math.max(1f, w));
-        c.scale(sc, sc, w / 2f, h / 2f);
+        float focusS = 1 + (it.scale - 1) * Math.min(1f, Style.px(540) / Math.max(1f, w));
+        c.scale(focusS, focusS, w / 2f, h / 2f);
 
         float pad = Style.px(inset), gap = Style.px(16);
         float x = pad;
