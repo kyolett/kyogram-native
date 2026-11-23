@@ -109,6 +109,18 @@ public class ThreadView extends View {
         ringGlow.setStyle(Paint.Style.STROKE);
     }
 
+    private String loadingText;
+
+    /** While a chat's messages are on their way ("Loading messages"), or why they didn't come. */
+    public void setLoading(String text) {
+        loadingText = text;
+        invalidate();
+    }
+
+    public boolean isEmpty() {
+        return bubbles.isEmpty();
+    }
+
     public void setGroup(boolean group) {
         this.group = group;
     }
@@ -427,8 +439,22 @@ public class ThreadView extends View {
             c.restoreToCount(save);
         }
 
+        // * no messages yet: a chip that breathes, and no ring (there's nothing to ring)
+        if (bubbles.isEmpty() && loadingText != null) {
+            float a = .55f + .45f * (float) Math.sin(android.os.SystemClock.uptimeMillis() / 260.0);
+            float tw = dayPaint.measureText(loadingText) + Style.px(28);
+            r.set((W - tw) / 2f, getHeight() - Style.px(52), (W + tw) / 2f, getHeight() - Style.px(24));
+            int al = dayPaint.getAlpha();
+            c.drawRoundRect(r, Style.px(14), Style.px(14), dayFill);
+            dayPaint.setAlpha((int) (al * a));
+            Paint.FontMetrics fm = dayPaint.getFontMetrics();
+            c.drawText(loadingText, r.left + Style.px(14), r.centerY() - (fm.ascent + fm.descent) / 2f, dayPaint);
+            dayPaint.setAlpha(al);
+            if (!Spring.reduced) postInvalidateOnAnimation();
+        }
+
         // * the ring around the message in focus
-        if (ringAlpha > .01f) {
+        if (ringAlpha > .01f && !bubbles.isEmpty()) {
             r.set(ringX.v, ringY.v + (scroll.v - scroll.t), ringX.v + ringW.v, ringY.v + (scroll.v - scroll.t) + ringH.v);
             // * the glow (box-shadow 0 0 24px .35): a few soft strokes, since this phone can't blur a stroke
             for (int k = 3; k >= 1; k--) {

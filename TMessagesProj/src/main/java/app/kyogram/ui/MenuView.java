@@ -31,11 +31,13 @@ public class MenuView extends View {
     public static final float TITLE_H = 47, ITEM = 72;
 
     private final ArrayList<Entry> entries = new ArrayList<>();
+    /** The sheet's heading. */
+    public String title = "Menu";
     private int focus;
     private final Spring pillY;
     private float stretch;
     private final Style.Pill pill = new Style.Pill(false);
-    private final TextPaint title = Style.text(Style.display, 22, Style.fg(191));
+    private final TextPaint titlePaint = Style.text(Style.display, 22, Style.fg(191));
     private final TextPaint label = Style.text(Style.semibold, 23, Style.INK);
     private final TextPaint key = Style.text(Style.bold, 19, Style.INK);
     private final TextPaint icon = Style.text(Style.bold, 22, Color.WHITE);
@@ -90,8 +92,8 @@ public class MenuView extends View {
     @Override
     protected void onDraw(Canvas c) {
         float w = getWidth(), item = Style.px(ITEM);
-        Paint.FontMetrics fm = title.getFontMetrics();
-        c.drawText("Menu", Style.px(16), Style.px(8) - fm.ascent, title);
+        Paint.FontMetrics fm = titlePaint.getFontMetrics();
+        c.drawText(title, Style.px(16), Style.px(8) - fm.ascent, titlePaint);
         c.save();
         c.translate(0, Style.px(TITLE_H));
         c.save();

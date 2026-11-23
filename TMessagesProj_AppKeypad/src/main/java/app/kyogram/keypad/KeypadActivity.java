@@ -40,6 +40,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import org.telegram.messenger.AccountInstance;
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.FileLog;
 import org.telegram.messenger.ApplicationLoader;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
@@ -95,6 +96,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
     private FrameLayout pageScreen;
     private HeadView pageHead;
     private ChatListView pageList;
+    private CareScreen care;
     private View dim;
     private GlassFrame sheet;
     private MenuView menu;
@@ -151,7 +153,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
 
     private int[] events() {
         return new int[]{NotificationCenter.dialogsNeedReload, NotificationCenter.updateInterfaces, NotificationCenter.didReceiveNewMessages,
-                NotificationCenter.messageReceivedByServer, NotificationCenter.messageSendError, NotificationCenter.messagesRead, NotificationCenter.dialogFiltersUpdated};
+                NotificationCenter.messageReceivedByServer, NotificationCenter.messageSendError, NotificationCenter.messagesRead, NotificationCenter.dialogFiltersUpdated, NotificationCenter.messagesDidLoad};
     }
 
     @Override
@@ -304,6 +306,34 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
         pageScreen.addView(pageHead, box(14, sb + px(6), 14, -1, px(72)));
         pageList = new ChatListView(this, false);
         pageScreen.addView(pageList, box(0, sb + px(88), 0, px(84), -1));
+        care = new CareScreen(this, sb, new CareScreen.Host() {
+            @Override
+            public void soft(String l, String c, String r) {
+                soft.set(l, c, r);
+            }
+
+            @Override
+            public void close() {
+                closePage();
+            }
+
+            @Override
+            public void keyboard(EditText f, boolean show) {
+                InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (show) {
+                    f.setFocusable(true);
+                    f.setFocusableInTouchMode(true);
+                    f.requestFocus();
+                    if (imm != null) imm.showSoftInput(f, 0);
+                } else if (f.hasFocus() || f.isFocusable()) {
+                    f.clearFocus();
+                    f.setFocusable(false);
+                    if (imm != null && root != null) imm.hideSoftInputFromWindow(root.getWindowToken(), 0);
+                }
+            }
+        });
+        care.setVisibility(View.GONE);
+        pageScreen.addView(care, new FrameLayout.LayoutParams(-1, -1));
 
         // * the menu
         dim = new View(this);
@@ -552,32 +582,73 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
         }
     }
 
+    /**
+     * A chat's messages: Telegram's own loader, which answers from this phone's cache at once and then
+     * from the server; a direct request a few seconds later if neither has answered (a dropped request
+     * left a chat empty with only the focus ring before).
+     */
     private void loadHistory(long did) {
+        historyTry++;
+        final int attempt = historyTry;
+        thread.setLoading("Loading messages");
+        try {
+            mc.loadMessages(did, 0, false, 40, 0, 0, true, 0, classGuid, 0, 0, 0, 0, 0, 0, false);
+        } catch (Throwable e) {
+            FileLog.e(e);
+        }
+        root.postDelayed(() -> {
+            if (chatId == did && historyTry == attempt && thread.isEmpty()) requestHistory(did, attempt, 0);
+        }, 3500);
+    }
+
+    private int historyTry;
+    private final int classGuid = ConnectionsManager.generateClassGuid();
+
+    private void requestHistory(long did, int attempt, int tries) {
         TLRPC.TL_messages_getHistory req = new TLRPC.TL_messages_getHistory();
         req.peer = mc.getInputPeer(did);
         req.limit = 40;
         ConnectionsManager.getInstance(account).sendRequest(req, (response, error) -> AndroidUtilities.runOnUIThread(() -> {
-            if (!(response instanceof TLRPC.messages_Messages) || chatId != did) return;
+            if (chatId != did || historyTry != attempt) return;
+            if (!(response instanceof TLRPC.messages_Messages)) {
+                if (tries < 3) {
+                    thread.setLoading("Loading messages");
+                    root.postDelayed(() -> {
+                        if (chatId == did && historyTry == attempt && thread.isEmpty()) requestHistory(did, attempt, tries + 1);
+                    }, 1500L * (tries + 1));
+                } else if (thread.isEmpty()) {
+                    thread.setLoading("Couldn't load · go back and open it again");
+                }
+                return;
+            }
             TLRPC.messages_Messages res = (TLRPC.messages_Messages) response;
             mc.putUsers(res.users, false);
             mc.putChats(res.chats, false);
             ArrayList<MessageObject> objs = new ArrayList<>();
-            HashMap<Integer, MessageObject> byId = new HashMap<>();
-            for (int i = res.messages.size() - 1; i >= 0; i--) {
-                TLRPC.Message m = res.messages.get(i);
-                MessageObject mo = new MessageObject(account, m, true, false);
-                objs.add(mo);
-                byId.put(m.id, mo);
-            }
-            for (MessageObject mo : objs) {
-                if (mo.messageOwner.reply_to != null && mo.messageOwner.reply_to.reply_to_msg_id != 0) {
-                    mo.replyMessageObject = byId.get(mo.messageOwner.reply_to.reply_to_msg_id);
-                }
-            }
-            updateReadOutbox();
-            thread.setMessages(objs);
-            markRead(did, objs);
+            for (TLRPC.Message m : res.messages) objs.add(new MessageObject(account, m, true, false));
+            showHistory(did, objs);
         }));
+    }
+
+    /** Messages in any order, from either source: oldest first, replies joined to what they quote. */
+    private void showHistory(long did, ArrayList<MessageObject> in) {
+        ArrayList<MessageObject> objs = new ArrayList<>(in);
+        java.util.Collections.sort(objs, (a, b) -> a.messageOwner.date != b.messageOwner.date ? Integer.compare(a.messageOwner.date, b.messageOwner.date) : Integer.compare(a.getId(), b.getId()));
+        HashMap<Integer, MessageObject> byId = new HashMap<>();
+        for (MessageObject mo : objs) byId.put(mo.getId(), mo);
+        for (MessageObject mo : objs) {
+            if (mo.replyMessageObject == null && mo.messageOwner.reply_to != null && mo.messageOwner.reply_to.reply_to_msg_id != 0) {
+                mo.replyMessageObject = byId.get(mo.messageOwner.reply_to.reply_to_msg_id);
+            }
+        }
+        thread.setLoading(objs.isEmpty() ? "No messages yet" : null);
+        updateReadOutbox();
+        thread.setMessages(objs);
+        if (screen == Screen.CHAT) {
+            thread.focusLast();
+            thread.showRing(true);
+        }
+        markRead(did, objs);
     }
 
     private void markRead(long did, ArrayList<MessageObject> objs) {
@@ -682,7 +753,8 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
             soft.set("Back", "REPLY", "Options");
             thread.showRing(true);
         } else if (screen == Screen.PAGE) {
-            soft.set("Back", pageOkLabel(), "");
+            if ("care".equals(page)) care.restoreKeys();
+            else soft.set("Back", pageOkLabel(), "");
         } else {
             soft.set("Menu", "OPEN", "Search");
         }
@@ -732,23 +804,16 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
         ArrayList<ChatListView.Item> items = new ArrayList<>();
         switch (id) {
             case "care":
-                pageHead.setTile("☺", "#5fd1a0", "#2a9a6a", "Care", "DroidShop · examples");
-                String[][] t = {
-                        {"#1046 · iPhone 13 thay pin", "Anh Tuấn · 0912 ••• 431", "new", "New"},
-                        {"#1044 · Galaxy S22 màn hình", "Chị Mai · chờ linh kiện", "warn", "Waiting"},
-                        {"#1041 · iPad Air sạc", "Anh Long · đang sửa", "warn", "Repairing"},
-                        {"#1038 · Pixel 7 camera", "Chị Hà · khách đã nhận", "ok", "Done"},
-                        {"#1035 · iPhone 11 Face ID", "Anh Bảo · đã báo giá", "new", "Quoted"}};
-                for (int i = 0; i < t.length; i++) {
-                    ChatListView.Item it = new ChatListView.Item();
-                    it.id = 1000 + i;
-                    it.name = t[i][0];
-                    it.preview = t[i][1];
-                    it.chip = t[i][3];
-                    chip(it, t[i][2]);
-                    items.add(it);
-                }
-                break;
+                // * Care is its own screen of springs (CareScreen): sign-in, tickets, a ticket
+                pageHead.setVisibility(View.GONE);
+                pageList.setVisibility(View.GONE);
+                care.setVisibility(View.VISIBLE);
+                screen = Screen.PAGE;
+                pageScreen.setVisibility(View.VISIBLE);
+                care.enter();
+                pushP.to(0, true);
+                pushP.to(1);
+                return;
             case "tasks":
                 pageHead.setTile("✓", "#ffb46a", "#e07a2a", "Tasks", "Morning shift");
                 JSONArray tasks = tasks();
@@ -769,6 +834,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
                 items.add(setting(3001, "Theme", Style.day ? "Day" : "Night"));
                 items.add(setting(3002, "Glass tint", Character.toUpperCase(Style.tint.charAt(0)) + Style.tint.substring(1)));
                 items.add(setting(3003, "Account", me != null && !TextUtils.isEmpty(me.username) ? "@" + me.username : me != null ? UserObject.getUserName(me) : ""));
+                items.add(setting(3005, "Care", app.kyogram.ui.Care.hasSession() ? (app.kyogram.ui.Care.accountName().isEmpty() ? "Sign out" : "Sign out · " + app.kyogram.ui.Care.accountName()) : "Signed out"));
                 items.add(setting(3004, "Version", "Keypad " + org.telegram.messenger.BuildVars.BUILD_VERSION_STRING));
                 break;
             case "new":
@@ -784,6 +850,9 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
                 }
                 break;
         }
+        care.setVisibility(View.GONE);
+        pageHead.setVisibility(View.VISIBLE);
+        pageList.setVisibility(View.VISIBLE);
         pageList.clear();
         pageList.setItems(items, ChatListView.FROM_NONE, false, true);
         screen = Screen.PAGE;
@@ -854,6 +923,15 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
                 items.add(n);
             }
             pageList.setItems(items, ChatListView.FROM_NONE, true, false);
+        } else if ("settings".equals(page) && it.id == 3005) {
+            if (!app.kyogram.ui.Care.hasSession()) {
+                pageList.bounce();
+                return;
+            }
+            app.kyogram.ui.Care.signOut((ok, err) -> {
+                Toast.makeText(this, "Signed out of DroidShop", Toast.LENGTH_SHORT).show();
+                if ("settings".equals(page) && screen == Screen.PAGE) openPageAgain();
+            });
         } else if ("settings".equals(page) && it.id == 3000) {
             Spring.reduced = !Spring.reduced;
             prefs.edit().putBoolean("reducedMotion", Spring.reduced).apply();
@@ -896,6 +974,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
     }
 
     private void closePage() {
+        if ("care".equals(page) && care != null) care.leave();
         screen = Screen.LIST;
         soft.set("Menu", "OPEN", "Search");
         pushP.to(0);
@@ -983,7 +1062,8 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
     public boolean dispatchKeyEvent(KeyEvent event) {
         if (list == null) return super.dispatchKeyEvent(event);
         int code = event.getKeyCode();
-        boolean typing = screen == Screen.TYPING || screen == Screen.SEARCH;
+        boolean careTyping = screen == Screen.PAGE && "care".equals(page) && care != null && care.typing();
+        boolean typing = screen == Screen.TYPING || screen == Screen.SEARCH || careTyping;
         int k = 0, digit = 0;
         switch (code) {
             case KeyEvent.KEYCODE_DPAD_UP: k = K_UP; break;
@@ -1004,7 +1084,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
             case KeyEvent.KEYCODE_CLEAR: k = K_BACK; break;
             case KeyEvent.KEYCODE_DEL:
                 // * クリア deletes while typing; with nothing left, it goes back
-                EditText field = screen == Screen.TYPING ? input : screen == Screen.SEARCH ? header.search : null;
+                EditText field = screen == Screen.TYPING ? input : screen == Screen.SEARCH ? header.search : careTyping ? care.field() : null;
                 if (field == null || field.length() == 0) k = K_BACK;
                 break;
             default:
@@ -1088,6 +1168,10 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
                 else if (k == K_SOFT_L || k == K_BACK) closeMenu();
                 break;
             case PAGE:
+                if ("care".equals(page)) {
+                    care.press(k, digit);
+                    break;
+                }
                 if (k == K_UP) pageList.moveFocus(-1, false);
                 else if (k == K_DOWN) pageList.moveFocus(1, false);
                 else if (k == K_OK) pageOk();
@@ -1107,6 +1191,13 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
             if (chatId != 0) {
                 updateReadOutbox();
                 thread.refresh();
+            }
+        } else if (id == NotificationCenter.messagesDidLoad) {
+            // * Telegram's loader: from the cache first, then the server's answer replaces it
+            if (args.length > 10 && args[10] instanceof Integer && (Integer) args[10] == classGuid && args[0] instanceof Long && (Long) args[0] == chatId) {
+                @SuppressWarnings("unchecked") ArrayList<MessageObject> objs = (ArrayList<MessageObject>) args[2];
+                boolean fromCache = args[3] instanceof Boolean && (Boolean) args[3];
+                if (objs != null && (!objs.isEmpty() || !fromCache)) showHistory(chatId, objs);
             }
         } else if (id == NotificationCenter.updateInterfaces) {
             int mask = (Integer) args[0];
@@ -1143,7 +1234,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
     // ── small views ──
 
     /** The colours behind everything (painted once, Style.wall). */
-    private static final class WallView extends View {
+    static final class WallView extends View {
         WallView(Context c) {
             super(c);
         }
@@ -1155,7 +1246,7 @@ public class KeypadActivity extends Activity implements NotificationCenter.Notif
     }
 
     /** A screen that can be revealed from a rounded rectangle (a chat growing out of its row). */
-    private static final class RevealFrame extends FrameLayout {
+    static final class RevealFrame extends FrameLayout {
         private final Path clip = new Path();
         private final RectF rect = new RectF();
         private float radius;

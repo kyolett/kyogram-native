@@ -30,6 +30,7 @@ public class HeaderView extends GlassFrame {
     private ValueAnimator searchAnim;
 
     private final ArrayList<String> tabs = new ArrayList<>();
+    private String titleText = "Kyogram";
     private int current;
     private final Spring glideX, glideW, tabsOffset;
 
@@ -60,6 +61,12 @@ public class HeaderView extends GlassFrame {
         glideX = new Spring(0, 380, 30, (v, vel) -> content.invalidate());
         glideW = new Spring(0, 380, 30, (v, vel) -> content.invalidate());
         tabsOffset = new Spring(0, 300, 34, (v, vel) -> content.invalidate());
+    }
+
+    /** The word on the left (the chat list's "Kyogram", Care's "Care"). */
+    public void setTitle(String t) {
+        titleText = t;
+        content.invalidate();
     }
 
     public void setTabs(ArrayList<String> names, int selected, boolean snap) {
@@ -160,7 +167,7 @@ public class HeaderView extends GlassFrame {
         }
 
         float tabsRoom() {
-            float titleW = title.measureText("Kyogram");
+            float titleW = title.measureText(titleText);
             return getWidth() - Style.px(22) - titleW - Style.px(12) - Style.px(10);
         }
 
@@ -188,7 +195,7 @@ public class HeaderView extends GlassFrame {
             c.translate(0, -Style.px(14) * lift);
             int a = c.saveLayerAlpha(0, -Style.px(20), getWidth(), h + Style.px(20), (int) (255 * fade));
             Paint.FontMetrics fm = title.getFontMetrics();
-            c.drawText("Kyogram", Style.px(22), h / 2f - (fm.ascent + fm.descent) / 2f, title);
+            c.drawText(titleText, Style.px(22), h / 2f - (fm.ascent + fm.descent) / 2f, title);
 
             float room = Math.min(tabsRoom(), tabsWidth());
             float boxH = Style.px(44), right = getWidth() - Style.px(10), left = right - room;
