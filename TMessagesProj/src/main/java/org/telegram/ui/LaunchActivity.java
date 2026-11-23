@@ -313,6 +313,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     private ActionBarLayout layersActionBarLayout;
     public ActionBarLayout rightActionBarLayout;
     private RelativeLayout launchLayout;
+    /** Kyogram: the server rail left of the chat list when unfolded (KyogramRailView). */
+    private KyogramRailView kyogramRail;
     private FrameLayout shadowTablet;
     private SizeNotifierFrameLayout backgroundTablet;
     public FrameLayout frameLayout;
@@ -418,6 +420,16 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
         instance = this;
         ApplicationLoader.postInitApplication();
+        // * Kyogram: starts in the night theme, the dark of Kyogram's Liquid glass (once; yours to change after)
+        try {
+            android.content.SharedPreferences kp = MessagesController.getGlobalMainSettings();
+            if (!kp.getBoolean("kyogram_night_set", false)) {
+                kp.edit().putBoolean("kyogram_night_set", true).apply();
+                Theme.ThemeInfo night = Theme.getTheme("Night");
+                if (night != null) Theme.applyTheme(night, true);
+            }
+        } catch (Throwable ignore) {
+        }
         AndroidUtilities.checkDisplaySize(this, getResources().getConfiguration());
         currentAccount = UserConfig.selectedAccount;
         if (BuildVars.DEBUG_VERSION || BuildVars.DEBUG_PRIVATE_VERSION) {
@@ -961,10 +973,20 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                         });
                     }
                     if (!tabletFullSize) {
-                        final int leftWidth = AndroidUtilities.getTabletLeftFragmentSize(width, insets.left, insets.right);
+                        // * Kyogram: rail | channel list | chat, as desktop Kyogram's Discord layout
+                        final int rail = kyogramRail != null ? dp(76) : 0;
+                        final int leftWidth = AndroidUtilities.getTabletLeftFragmentSize(width - rail, insets.left, insets.right);
+                        if (kyogramRail != null) {
+                            kyogramRail.setVisibility(View.VISIBLE);
+                            kyogramRail.measure(MeasureSpec.makeMeasureSpec(rail, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+                        }
                         actionBarLayout.getView().measure(MeasureSpec.makeMeasureSpec(leftWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
-                        rightActionBarLayout.getView().measure(MeasureSpec.makeMeasureSpec(width - leftWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+                        rightActionBarLayout.getView().measure(MeasureSpec.makeMeasureSpec(width - rail - leftWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
                     } else {
+                        if (kyogramRail != null) {
+                            kyogramRail.setVisibility(View.GONE);
+                            kyogramRail.measure(MeasureSpec.makeMeasureSpec(0, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
+                        }
                         actionBarLayout.getView().measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
                     }
                     backgroundTablet.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
@@ -982,9 +1004,11 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     final int width = getMeasuredWidth();
                     final int height = getMeasuredHeight();
                     if (!tabletFullSize) {
-                        final int leftWidth = AndroidUtilities.getTabletLeftFragmentSize(width, insets.left, insets.right);
-                        actionBarLayout.getView().layout(0, 0, actionBarLayout.getView().getMeasuredWidth(), actionBarLayout.getView().getMeasuredHeight());
-                        rightActionBarLayout.getView().layout(leftWidth, 0, leftWidth + rightActionBarLayout.getView().getMeasuredWidth(), rightActionBarLayout.getView().getMeasuredHeight());
+                        final int rail = kyogramRail != null ? dp(76) : 0;
+                        final int leftWidth = AndroidUtilities.getTabletLeftFragmentSize(width - rail, insets.left, insets.right);
+                        if (kyogramRail != null) kyogramRail.layout(0, 0, rail, height);
+                        actionBarLayout.getView().layout(rail, 0, rail + actionBarLayout.getView().getMeasuredWidth(), actionBarLayout.getView().getMeasuredHeight());
+                        rightActionBarLayout.getView().layout(rail + leftWidth, 0, rail + leftWidth + rightActionBarLayout.getView().getMeasuredWidth(), rightActionBarLayout.getView().getMeasuredHeight());
                     } else {
                         actionBarLayout.getView().layout(0, 0, actionBarLayout.getView().getMeasuredWidth(), actionBarLayout.getView().getMeasuredHeight());
                     }
@@ -1050,6 +1074,9 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
             rightActionBarLayout.setFragmentStack(rightFragmentsStack);
             rightActionBarLayout.setDelegate(this);
             launchLayout.addView(rightActionBarLayout.getView());
+
+            kyogramRail = new KyogramRailView(this);
+            launchLayout.addView(kyogramRail);
 
             shadowTablet = new FrameLayout(this);
             shadowTablet.setVisibility(layerFragmentsStack.isEmpty() ? View.GONE : View.VISIBLE);
