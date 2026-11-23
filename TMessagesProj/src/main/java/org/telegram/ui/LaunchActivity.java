@@ -422,6 +422,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
         ApplicationLoader.postInitApplication();
         // * Kyogram: the Liquid glass look (its own theme, made once; yours to change after)
         if (!BuildVars.isKeypadApp()) app.kyogram.ui.KyogramLook.applyOnce();
+        else app.kyogram.ui.KyogramLook.keepConnected();
         // * Kyogram: auto-reply listens for new messages in every signed-in account
         for (int a = 0; a < UserConfig.MAX_ACCOUNT_COUNT; a++) {
             if (UserConfig.getInstance(a).isClientActivated()) app.kyogram.ui.AutoReply.start(a);

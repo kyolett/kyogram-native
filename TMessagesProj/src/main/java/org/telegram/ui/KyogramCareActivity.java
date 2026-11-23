@@ -632,7 +632,17 @@ public class KyogramCareActivity extends BaseFragment {
                     Toast.makeText(c, "signed-out".equals(error) ? "Signed out of DroidShop" : error, Toast.LENGTH_LONG).show();
                     return;
                 }
-                Toast.makeText(c, "Saved " + code, Toast.LENGTH_SHORT).show();
+                Toast.makeText(c, "Saved " + code + " · report copied, paste it in the shop's chat", Toast.LENGTH_LONG).show();
+                Integer leftR = item != null ? Care.warrantyDaysLeft(inv.date, item.term) : null;
+                StringBuilder report = new StringBuilder("Em tiếp nhận hàng bảo hành mới:");
+                String who = (item != null ? item.name : inv.description != null ? inv.description : "") + (TextUtils.isEmpty(inv.customer) ? "" : " của " + inv.customer);
+                if (!who.trim().isEmpty()) report.append('\n').append(who.trim()).append(TextUtils.isEmpty(inv.phone) ? "" : " (" + inv.phone + ")");
+                if (item != null && item.serial != null) report.append("\nSerial/IMEI: ").append(item.serial);
+                if (issue.getText().length() > 0) report.append('\n').append(issue.getText());
+                if (inv.date != null) report.append("\nNgày mua: ").append(inv.date);
+                report.append("\nHết hạn bảo hành: ").append(leftR == null ? "chưa rõ" : leftR < 0 ? "Có" : "Không");
+                if (!TextUtils.isEmpty(code)) report.append("\nMã phiếu: ").append(code);
+                AndroidUtilities.addToClipboard(report.toString());
                 if (makeCard.isChecked()) {
                     Integer left = item != null ? Care.warrantyDaysLeft(inv.date, item.term) : null;
                     app.kyogram.ui.Trello.warrantyCard(c, inv.customer, inv.phone, item != null ? item.name : inv.description, item != null ? item.serial : null,

@@ -24,7 +24,17 @@ public final class KyogramLook {
     private KyogramLook() {
     }
 
+    /** Notifications with the app closed: Telegram's kept connection, since Kyogram can't get Telegram's pushes. */
+    public static void keepConnected() {
+        SharedPreferences n = MessagesController.getGlobalNotificationsSettings();
+        if (!n.contains("pushService")) {
+            n.edit().putBoolean("pushService", true).apply();
+            ApplicationLoader.startPushService();
+        }
+    }
+
     public static void applyOnce() {
+        keepConnected();
         SharedPreferences p = MessagesController.getGlobalMainSettings();
         if (p.getBoolean(DONE, false)) return;
         p.edit().putBoolean(DONE, true).apply();

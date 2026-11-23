@@ -1684,6 +1684,7 @@ public class ChatActivity extends BaseFragment implements
     private final static int kyogram_hide = 9101;
     private final static int kyogram_autoreply = 9102;
     private final static int kyogram_autoreply_messages = 9103;
+    private final static int kyogram_members = 9104;
     private final static int delete_chat = 16;
     private final static int share_contact = 17;
     private final static int mute = 18;
@@ -3852,6 +3853,8 @@ public class ChatActivity extends BaseFragment implements
                         return;
                     }
                     showDialog(AlertsCreator.createTTLAlert(getParentActivity(), currentEncryptedChat, themeDelegate).create());
+                } else if (id == kyogram_members) {
+                    KyogramMembers.show(ChatActivity.this, currentChat.id);
                 } else if (id == kyogram_autoreply) {
                     app.kyogram.ui.AutoReply.toggle(currentAccount, dialog_id);
                     boolean on = app.kyogram.ui.AutoReply.isOn(currentAccount, dialog_id);
@@ -4451,6 +4454,9 @@ public class ChatActivity extends BaseFragment implements
             if (!isTopic && dialog_id != 0 && app.kyogram.ui.AutoReply.canUse(currentAccount, dialog_id) && (currentUser == null || !currentUser.bot)) {
                 headerItem.lazilyAddSubItem(kyogram_autoreply, R.drawable.msg_bot, app.kyogram.ui.AutoReply.isOn(currentAccount, dialog_id) ? "Auto-reply: on" : "Auto-reply: off");
                 headerItem.lazilyAddSubItem(kyogram_autoreply_messages, R.drawable.msg_edit, "Auto-reply messages…");
+            }
+            if (currentChat != null && !ChatObject.isChannelAndNotMegaGroup(currentChat)) {
+                headerItem.lazilyAddSubItem(kyogram_members, R.drawable.msg_groups, "Members (online first)");
             }
             if (!isTopic && dialog_id != 0) {
                 headerItem.lazilyAddSubItem(kyogram_hide, R.drawable.msg_archive, app.kyogram.ui.Hidden.isHidden(dialog_id) ? "Unhide chat" : "Hide chat");

@@ -486,6 +486,23 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         final ItemOptions o = ItemOptions.makeOptions(this, anchor);
         // * Kyogram: Hidden chats, from holding the Chats tab
         o.add(R.drawable.msg_archive_hide, "Hidden chats", () -> presentFragment(new KyogramHiddenActivity()));
+        // * Kyogram: Delete all wallpapers (wallpaperWipe.ts), for a phone where your pictures shouldn't show
+        o.add(R.drawable.msg_delete, "Delete all wallpapers", () -> {
+            org.telegram.ui.ActionBar.AlertDialog.Builder b = new org.telegram.ui.ActionBar.AlertDialog.Builder(getParentActivity());
+            b.setTitle("Delete all wallpapers?");
+            b.setMessage("Your uploaded chat wallpapers come off your account and this phone. Chats go back to the default background.");
+            b.setPositiveButton("Delete", (d, w) -> getConnectionsManager().sendRequest(new org.telegram.tgnet.tl.TL_account.resetWallPapers(), (response, error) -> AndroidUtilities.runOnUIThread(() -> {
+                try {
+                    java.io.File dir = new java.io.File(org.telegram.messenger.ApplicationLoader.getFilesDirFixed(), "wallpapers");
+                    java.io.File[] files = dir.listFiles();
+                    if (files != null) for (java.io.File f : files) f.delete();
+                } catch (Throwable ignore) {
+                }
+                android.widget.Toast.makeText(getParentActivity(), error == null ? "Wallpapers deleted" : "Couldn't reach Telegram", android.widget.Toast.LENGTH_SHORT).show();
+            })));
+            b.setNegativeButton("Cancel", null);
+            showDialog(b.create());
+        });
         if (filters == null || filters.size() <= 1) {
             o.show();
             return true;

@@ -14,20 +14,20 @@ kyolett/kyogram-native --ref master -f app=standalone`.
 | Care tickets (droidshop.ts) | done: list, search, filter, ticket page, status, notes | `ui/KyogramCareActivity.java`, `app/kyogram/ui/Care.java` |
 | Kyogram x OA (zaloOa.ts, desktop/zaloOa.js) | done: sign-in, chats, messages, reply, polling | `ui/KyogramZaloView.java`, `app/kyogram/ui/ZaloOa.java` |
 | Discord rail (look.ts, railPeople.tsx) | done: pinned chats + folders | `ui/KyogramRailView.java`, `LaunchActivity` |
-| Rail people = recent DMs (railPeople.tsx) | todo | |
-| Server header (serverHeader.tsx) | todo | |
-| User panel + status (userPanel.tsx, statusButton.tsx, presence.ts) | todo | |
-| Members panel (membersPanel.tsx) | todo | |
-| Hidden chats + PIN (hidden.ts) | todo | |
-| Auto-reply (autoReply.ts) | todo | |
-| DroidShop lookup: purchases, invoice (droidshop.ts) | todo | |
-| New warranty ticket (sendDroidshopTicket) | todo | |
-| Ticket ↔ Trello card (ticketTrello.ts) | todo | |
-| Warranty → Trello card (createKyogramWarrantyCard) | todo | |
-| Zalo customer ↔ Trello (zaloOaTrello.ts) | todo | |
-| Card photos in task details | todo | |
-| Delete all wallpapers (wallpaperWipe.ts) | todo | |
-| Drag chat to folder (dragToFolder.ts) | todo | |
-| Report mark (reportMark.ts) | todo | |
+| Rail people = recent DMs (railPeople.tsx) | done | `ui/KyogramRailView.java` |
+| Server header (serverHeader.tsx) | done: folder name as the list's title | `ui/KyogramRailView.java` |
+| User panel + status (userPanel.tsx, statusButton.tsx, presence.ts) | done: avatar + dot in the rail; online/idle/dnd/invisible wired into MessagesController, NotificationsController | `app/kyogram/ui/Presence.java` |
+| Members panel (membersPanel.tsx) | done: chat ⋮ → Members (online first) | `ui/KyogramMembers.java` |
+| Hidden chats + PIN (hidden.ts) | done: chat ⋮ → Hide chat; hold the Chats tab → Hidden chats | `app/kyogram/ui/Hidden.java`, `ui/KyogramHiddenActivity.java` |
+| Auto-reply (autoReply.ts) | done: chat ⋮ → Auto-reply, messages | `app/kyogram/ui/AutoReply.java` |
+| DroidShop lookup: purchases, invoice (droidshop.ts) | done: Care ⌕ | `KyogramCareActivity`, `Care.java` |
+| New warranty ticket (sendDroidshopTicket) | done, with camera photos | same |
+| Ticket ↔ Trello card (ticketTrello.ts) | done | same, `Trello.java` |
+| Warranty → Trello card (createKyogramWarrantyCard) | done (+ report copied) | same |
+| Zalo customer ↔ Trello (zaloOaTrello.ts) | done | `KyogramZaloView` |
+| Card photos in task details | done | `KyogramTasksActivity` |
+| Delete all wallpapers (wallpaperWipe.ts) | done: hold the Chats tab | `MainTabsActivity` |
+| Drag chat to folder (dragToFolder.ts) | Telegram's own: hold a chat → Add to folder | |
+| Report mark (reportMark.ts) | done: the warranty report is copied to paste | `KyogramCareActivity` |
 | Web apps window (webApps.ts) | n/a on phone (opens in browser) | |
-| Notifications with the app closed | todo: Firebase project | |
+| Notifications with the app closed | done: Telegram's kept connection on by default (no Firebase needed) | `KyogramLook.keepConnected` |
