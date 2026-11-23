@@ -291,8 +291,31 @@ public class KyogramTasksActivity extends BaseFragment {
             }
         });
         b.setNegativeButton("Close", null);
+        // * the card's photos, under its text (tap one for the full size in the browser)
+        LinearLayout photos = new LinearLayout(getParentActivity());
+        photos.setOrientation(LinearLayout.VERTICAL);
+        photos.setPadding(AndroidUtilities.dp(22), 0, AndroidUtilities.dp(22), 0);
+        b.setView(photos);
         AlertDialog dialog = b.create();
         showDialog(dialog);
+        if (card.attachments > 0) Trello.photos(getContext(), card.id, (urls, err) -> {
+            if (urls == null) return;
+            for (String url : urls) {
+                android.widget.ImageView img = new android.widget.ImageView(getParentActivity());
+                img.setAdjustViewBounds(true);
+                img.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+                LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(-1, -2);
+                ip.topMargin = AndroidUtilities.dp(8);
+                photos.addView(img, ip);
+                Trello.image(getContext(), url, (bmp, e2) -> {
+                    if (bmp != null) {
+                        img.setImageBitmap(bmp);
+                        img.setAlpha(0f);
+                        img.animate().alpha(1f).setDuration(200).start();
+                    }
+                });
+            }
+        });
         Trello.details(getContext(), card.id, (desc, error) -> {
             String text = error != null ? "Couldn't load the card: " + error : TextUtils.isEmpty(desc) ? "No description." : desc;
             String meta = describe(card);

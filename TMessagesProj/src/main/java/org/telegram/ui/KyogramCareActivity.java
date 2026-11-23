@@ -599,6 +599,12 @@ public class KyogramCareActivity extends BaseFragment {
         TextView photo = button(c, "Take a photo", false);
         photo.setOnClickListener(v -> takePhoto());
         col.addView(photo, lp(6));
+        CheckBox makeCard = new CheckBox(c);
+        makeCard.setText("Also make a Trello card (photos included)");
+        makeCard.setTextColor(Style.INK);
+        makeCard.setChecked(app.kyogram.ui.Trello.connected(c));
+        makeCard.setVisibility(app.kyogram.ui.Trello.connected(c) ? View.VISIBLE : View.GONE);
+        col.addView(makeCard, lp(10));
         TextView save = button(c, "Tạo phiếu", true);
         col.addView(save, lp(16));
         TextView cancel = button(c, "Cancel", false);
@@ -627,6 +633,14 @@ public class KyogramCareActivity extends BaseFragment {
                     return;
                 }
                 Toast.makeText(c, "Saved " + code, Toast.LENGTH_SHORT).show();
+                if (makeCard.isChecked()) {
+                    Integer left = item != null ? Care.warrantyDaysLeft(inv.date, item.term) : null;
+                    app.kyogram.ui.Trello.warrantyCard(c, inv.customer, inv.phone, item != null ? item.name : inv.description, item != null ? item.serial : null,
+                            inv.date, left == null ? null : left < 0, issue.getText().toString(), code, new ArrayList<>(formPhotos), (card, e2) -> {
+                                if (e2 != null) Toast.makeText(c, "Trello: " + e2, Toast.LENGTH_LONG).show();
+                                else if (!TextUtils.isEmpty(code)) app.kyogram.ui.Trello.setTicketLink(c, code, card);
+                            });
+                }
                 load();
                 if (!TextUtils.isEmpty(code)) openTicket(code);
                 else closePanel();
@@ -676,6 +690,75 @@ public class KyogramCareActivity extends BaseFragment {
             pendingPhoto = null;
             if (photosLabel != null) photosLabel.setText(formPhotos.size() + (formPhotos.size() == 1 ? " photo" : " photos"));
         }
+    }
+
+    /** The ticket's Trello card: found by its code on the board, or picked by hand (ticketTrelloPanel.tsx). */
+    private void trelloSection(Context c, LinearLayout col, Care.Detail d) {
+        if (!app.kyogram.ui.Trello.connected(c)) return;
+        col.addView(para(c, "Trello card", 21, Style.INK, Style.bold), lp(22));
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(LinearLayout.VERTICAL);
+        col.addView(box, lp(6));
+        Runnable[] show = new Runnable[1];
+        show[0] = () -> {
+            box.removeAllViews();
+            String[] link = app.kyogram.ui.Trello.ticketLink(c, d.code);
+            if (link != null) {
+                LinearLayout card = cardBox(c);
+                card.addView(para(c, link.length > 2 ? link[2] : link[1], 18, Style.INK, Style.semibold));
+                card.addView(para(c, "Notes you add here are also posted on this card.", 15, Style.INK3, Style.regular), lp(4));
+                card.setOnClickListener(v -> {
+                    try {
+                        getParentActivity().startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(link[1])));
+                    } catch (Exception ignore) {
+                    }
+                });
+                box.addView(card);
+                TextView unlink = button(c, "Unlink", false);
+                unlink.setOnClickListener(v -> {
+                    app.kyogram.ui.Trello.setTicketLink(c, d.code, null);
+                    show[0].run();
+                });
+                box.addView(unlink, lp(8));
+                return;
+            }
+            TextView finding = para(c, "Looking for a card that names " + d.code + "…", 16, Style.INK2, Style.regular);
+            box.addView(finding);
+            app.kyogram.ui.Trello.search(c, "\"" + d.code + "\"", (found, error) -> {
+                if (found != null && !found.isEmpty()) {
+                    app.kyogram.ui.Trello.Found f = found.get(0);
+                    for (app.kyogram.ui.Trello.Found x : found) if (!x.closed) { f = x; break; }
+                    app.kyogram.ui.Trello.setTicketLink(c, d.code, f);
+                    show[0].run();
+                    return;
+                }
+                box.removeAllViews();
+                box.addView(para(c, "No card names this ticket. Search the board to pick one:", 16, Style.INK2, Style.regular));
+                EditText q = field(c, "Customer, phone or product", false);
+                q.setSingleLine(true);
+                box.addView(q, lp(8));
+                LinearLayout results = new LinearLayout(c);
+                results.setOrientation(LinearLayout.VERTICAL);
+                TextView go = button(c, "Search Trello", false);
+                box.addView(go, lp(8));
+                box.addView(results, lp(6));
+                go.setOnClickListener(v -> app.kyogram.ui.Trello.search(c, q.getText().toString().trim(), (list, e2) -> {
+                    results.removeAllViews();
+                    if (list == null) return;
+                    for (app.kyogram.ui.Trello.Found f : list) {
+                        LinearLayout card = cardBox(c);
+                        card.addView(para(c, f.name, 17, Style.INK, Style.semibold));
+                        card.setOnClickListener(x -> {
+                            app.kyogram.ui.Trello.setTicketLink(c, d.code, f);
+                            app.kyogram.ui.Trello.comment(c, f.id, "🔗 Liên kết phiếu bảo hành DroidShop " + d.code, (ok, e3) -> {});
+                            show[0].run();
+                        });
+                        results.addView(card, lp(6));
+                    }
+                }));
+            });
+        };
+        show[0].run();
     }
 
     private void showSignIn() {
@@ -755,6 +838,8 @@ public class KyogramCareActivity extends BaseFragment {
             col.addView(para(c, TextUtils.join(" · ", d.accessories), 18, Style.INK, Style.regular), lp(2));
         }
 
+        trelloSection(c, col, d);
+
         // * change the status
         if (d.canChangeStatus && !d.statusOptions.isEmpty()) {
             col.addView(para(c, "Change status", 21, Style.INK, Style.bold), lp(22));
@@ -816,6 +901,11 @@ public class KyogramCareActivity extends BaseFragment {
                         Toast.makeText(c, error, Toast.LENGTH_LONG).show();
                         return;
                     }
+                    // * the note goes on the ticket's Trello card too (ticketTrello.ts)
+                    String[] link = app.kyogram.ui.Trello.connected(c) ? app.kyogram.ui.Trello.ticketLink(c, d.code) : null;
+                    if (link != null) app.kyogram.ui.Trello.comment(c, link[0], "📝 " + d.code + ": " + text, (ok, e2) -> {
+                        if (e2 != null) Toast.makeText(c, "Trello: " + e2, Toast.LENGTH_SHORT).show();
+                    });
                     fillTicket(c, col, nd);
                 });
             });

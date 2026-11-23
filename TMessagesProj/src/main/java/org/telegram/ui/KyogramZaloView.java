@@ -266,6 +266,16 @@ public class KyogramZaloView extends FrameLayout {
         title.setPadding(px(18), 0, px(18), 0);
         title.setOnClickListener(v -> closePanel());
         head.addView(title, new FrameLayout.LayoutParams(-1, -1));
+        // * the customer's Trello cards (zaloOaTrello.ts): the tasks about them, linked on this phone
+        if (app.kyogram.ui.Trello.connected(getContext())) {
+            TextView trello = label(17, Style.INK2, Style.semibold);
+            trello.setText("Trello");
+            trello.setGravity(Gravity.CENTER);
+            trello.setPadding(px(16), 0, px(16), 0);
+            trello.setOnClickListener(v -> customerCards(c));
+            head.addView(trello, new FrameLayout.LayoutParams(-2, -1, Gravity.RIGHT));
+            title.setPadding(px(18), 0, px(100), 0);
+        }
         FrameLayout.LayoutParams hlp = new FrameLayout.LayoutParams(-1, px(60));
         hlp.setMargins(px(14), topInset, px(14), 0);
         p.addView(head, hlp);
@@ -324,6 +334,71 @@ public class KyogramZaloView extends FrameLayout {
         });
         loadThread(true);
         ZaloOa.markRead(c.convId);
+    }
+
+    private void customerCards(ZaloOa.Chat chat) {
+        Context ctx = getContext();
+        LinearLayout col = new LinearLayout(ctx);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setPadding(px(20), px(10), px(20), px(10));
+        ScrollView sv = new ScrollView(ctx);
+        sv.addView(col);
+        org.telegram.ui.ActionBar.AlertDialog.Builder b = new org.telegram.ui.ActionBar.AlertDialog.Builder(ctx);
+        b.setTitle("Trello · " + chat.name);
+        b.setView(sv);
+        b.setNegativeButton("Close", null);
+        org.telegram.ui.ActionBar.AlertDialog dialog = b.create();
+        Runnable[] fill = new Runnable[1];
+        fill[0] = () -> {
+            col.removeAllViews();
+            for (String[] card : app.kyogram.ui.Trello.customerCards(ctx, chat.convId)) {
+                TextView t = label(17, 0xff000000 | Style.ACCENT, Style.semibold);
+                t.setText("• " + card[2]);
+                t.setPadding(0, px(8), 0, px(8));
+                t.setOnClickListener(v -> {
+                    try {
+                        ctx.startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(card[1])));
+                    } catch (Exception ignore) {
+                    }
+                });
+                t.setOnLongClickListener(v -> {
+                    app.kyogram.ui.Trello.Found f = new app.kyogram.ui.Trello.Found();
+                    f.id = card[0];
+                    app.kyogram.ui.Trello.linkCustomerCard(ctx, chat.convId, f, false);
+                    fill[0].run();
+                    return true;
+                });
+                col.addView(t);
+            }
+            EditText q = new EditText(ctx);
+            q.setHint("Search the board to link a card");
+            q.setSingleLine(true);
+            q.setText(chat.name);
+            col.addView(q);
+            LinearLayout results = new LinearLayout(ctx);
+            results.setOrientation(LinearLayout.VERTICAL);
+            TextView go = label(17, 0xff000000 | Style.ACCENT, Style.bold);
+            go.setText("Search");
+            go.setPadding(0, px(10), 0, px(10));
+            col.addView(go);
+            col.addView(results);
+            go.setOnClickListener(v -> app.kyogram.ui.Trello.search(ctx, q.getText().toString().trim(), (list, e) -> {
+                results.removeAllViews();
+                if (list == null) return;
+                for (app.kyogram.ui.Trello.Found f : list) {
+                    TextView t = label(16, 0xff444444, Style.regular);
+                    t.setText("+ " + f.name);
+                    t.setPadding(0, px(8), 0, px(8));
+                    t.setOnClickListener(x -> {
+                        app.kyogram.ui.Trello.linkCustomerCard(ctx, chat.convId, f, true);
+                        fill[0].run();
+                    });
+                    results.addView(t);
+                }
+            }));
+        };
+        fill[0].run();
+        dialog.show();
     }
 
     private int shownCount = -1;

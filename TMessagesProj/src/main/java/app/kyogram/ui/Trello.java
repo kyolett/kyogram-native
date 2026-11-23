@@ -273,6 +273,199 @@ public final class Trello {
         async(() -> card(new JSONObject(request("POST", "/1/cards", q("idList", listId, "pos", "bottom", "name", name), key, token))), cb);
     }
 
+    // ── finding cards, commenting, photos, warranty cards (ticketTrello.ts, trello.ts) ──
+
+    public static final class Found {
+        public String id, name, shortUrl;
+        public boolean closed;
+    }
+
+    /** Cards on the board whose name, description or comments match (Trello's own search). */
+    public static void search(Context c, String query, Callback<ArrayList<Found>> cb) {
+        String key = key(c), token = token(c), board = boardId(c);
+        async(() -> {
+            JSONObject res = new JSONObject(request("GET", "/1/search", q("query", query, "modelTypes", "cards", "idBoards", board,
+                    "card_fields", "name,shortUrl,closed", "cards_limit", "20", "partial", "true"), key, token));
+            ArrayList<Found> out = new ArrayList<>();
+            JSONArray a = res.optJSONArray("cards");
+            if (a != null) for (int i = 0; i < a.length(); i++) {
+                JSONObject o = a.getJSONObject(i);
+                Found f = new Found();
+                f.id = o.optString("id");
+                f.name = o.optString("name");
+                f.shortUrl = o.optString("shortUrl");
+                f.closed = o.optBoolean("closed");
+                out.add(f);
+            }
+            return out;
+        }, cb);
+    }
+
+    public static void comment(Context c, String cardId, String text, Callback<Boolean> cb) {
+        String key = key(c), token = token(c);
+        async(() -> {
+            request("POST", "/1/cards/" + Uri.encode(cardId) + "/actions/comments", q("text", text), key, token);
+            return true;
+        }, cb);
+    }
+
+    /** Uploads a photo to a card (multipart, as Trello takes them). */
+    private static void attach(String key, String token, String cardId, java.io.File file) throws Exception {
+        String boundary = "kyogram" + System.currentTimeMillis();
+        URL url = new URL("https://api.trello.com/1/cards/" + Uri.encode(cardId) + "/attachments?key=" + URLEncoder.encode(key, "UTF-8") + "&token=" + URLEncoder.encode(token, "UTF-8"));
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setConnectTimeout(20000);
+        conn.setReadTimeout(60000);
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+        OutputStream os = conn.getOutputStream();
+        os.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"name\"\r\n\r\n" + file.getName() + "\r\n").getBytes("UTF-8"));
+        os.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + file.getName() + "\"\r\nContent-Type: image/jpeg\r\n\r\n").getBytes("UTF-8"));
+        java.io.FileInputStream in = new java.io.FileInputStream(file);
+        byte[] buf = new byte[16384];
+        int n;
+        while ((n = in.read(buf)) > 0) os.write(buf, 0, n);
+        in.close();
+        os.write(("\r\n--" + boundary + "--\r\n").getBytes("UTF-8"));
+        os.close();
+        if (conn.getResponseCode() >= 400) throw new Exception("Trello didn't take the photo");
+    }
+
+    public static void attachPhotos(Context c, String cardId, ArrayList<java.io.File> files, Callback<Integer> cb) {
+        String key = key(c), token = token(c);
+        async(() -> {
+            int failed = 0;
+            for (java.io.File f : files) {
+                try {
+                    attach(key, token, cardId, f);
+                } catch (Exception e) {
+                    failed++;
+                }
+            }
+            return failed;
+        }, cb);
+    }
+
+    /** A warranty card in the current shift's column, in Vietnamese like the desktop's, with photos. */
+    public static void warrantyCard(Context c, String customer, String phone, String item, String serial, String purchaseDate, Boolean expired, String description, String ticketCode, ArrayList<java.io.File> photos, Callback<Found> cb) {
+        String key = key(c), token = token(c);
+        Shift shift = currentShift(c);
+        String listId = shift != null && !shift.listId.isEmpty() ? shift.listId : fallbackListId(c);
+        async(() -> {
+            if (listId == null || listId.isEmpty()) throw new Exception("No Trello column is set for this time of day");
+            StringBuilder d = new StringBuilder();
+            d.append("**Khách hàng:** ").append(customer).append('\n');
+            d.append("**Số điện thoại:** ").append(phone == null || phone.isEmpty() ? "-" : phone).append('\n');
+            d.append("**Sản phẩm:** ").append(item).append('\n');
+            if (serial != null && !serial.isEmpty()) d.append("**Serial/IMEI:** ").append(serial).append('\n');
+            d.append("**Ngày mua:** ").append(purchaseDate == null || purchaseDate.isEmpty() ? "-" : purchaseDate).append('\n');
+            d.append("**Hết hạn bảo hành:** ").append(expired == null ? "chưa rõ" : expired ? "Có" : "Không").append("\n\n");
+            d.append("**Mô tả lỗi:**\n").append(description == null || description.isEmpty() ? "-" : description).append("\n\n");
+            if (ticketCode != null && !ticketCode.isEmpty()) d.append("Phiếu bảo hành DroidShop ").append(ticketCode).append("\n\n");
+            d.append("_Thêm từ Kyogram").append(shift != null ? " trong " + shift.name : "").append(", ")
+                    .append(new java.text.SimpleDateFormat("HH:mm dd/MM/yyyy", java.util.Locale.getDefault()).format(new java.util.Date())).append('_');
+            StringBuilder name = new StringBuilder();
+            for (String part : new String[]{customer, phone, item}) if (part != null && !part.isEmpty()) name.append(name.length() > 0 ? " - " : "").append(part);
+            JSONObject o = new JSONObject(request("POST", "/1/cards", q("idList", listId, "pos", "top", "name", name.length() > 0 ? name.toString() : "Hàng bảo hành", "desc", d.toString()), key, token));
+            Found f = new Found();
+            f.id = o.optString("id");
+            f.name = o.optString("name");
+            f.shortUrl = o.optString("shortUrl");
+            if (photos != null) for (java.io.File p : photos) {
+                try {
+                    attach(key, token, f.id, p);
+                } catch (Exception ignore) {
+                }
+            }
+            return f;
+        }, cb);
+    }
+
+    // ── links: a ticket ↔ its card, a Zalo customer ↔ their cards (kept on this phone) ──
+
+    public static String[] ticketLink(Context c, String code) {
+        String v = prefs(c).getString("ticket:" + code, null);
+        return v == null ? null : v.split("\n", 3);
+    }
+
+    public static void setTicketLink(Context c, String code, Found card) {
+        if (card == null) prefs(c).edit().remove("ticket:" + code).apply();
+        else prefs(c).edit().putString("ticket:" + code, card.id + "\n" + card.shortUrl + "\n" + card.name).apply();
+    }
+
+    public static ArrayList<String[]> customerCards(Context c, String convId) {
+        ArrayList<String[]> out = new ArrayList<>();
+        try {
+            JSONArray a = new JSONArray(prefs(c).getString("zalo:" + convId, "[]"));
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject o = a.getJSONObject(i);
+                out.add(new String[]{o.optString("id"), o.optString("url"), o.optString("name")});
+            }
+        } catch (Exception ignore) {
+        }
+        return out;
+    }
+
+    public static void linkCustomerCard(Context c, String convId, Found card, boolean link) {
+        ArrayList<String[]> cards = customerCards(c, convId);
+        JSONArray a = new JSONArray();
+        for (String[] k : cards) {
+            if (k[0].equals(card.id)) continue;
+            try {
+                a.put(new JSONObject().put("id", k[0]).put("url", k[1]).put("name", k[2]));
+            } catch (Exception ignore) {
+            }
+        }
+        if (link) {
+            try {
+                a.put(new JSONObject().put("id", card.id).put("url", card.shortUrl).put("name", card.name));
+            } catch (Exception ignore) {
+            }
+        }
+        prefs(c).edit().putString("zalo:" + convId, a.toString()).apply();
+    }
+
+    /** A card's photos (thumbnail URLs of its uploaded images), for its details. */
+    public static void photos(Context c, String cardId, Callback<ArrayList<String>> cb) {
+        String key = key(c), token = token(c);
+        async(() -> {
+            JSONArray a = new JSONArray(request("GET", "/1/cards/" + Uri.encode(cardId) + "/attachments", q("fields", "url,mimeType,isUpload,previews"), key, token));
+            ArrayList<String> out = new ArrayList<>();
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject o = a.getJSONObject(i);
+                String mime = o.optString("mimeType", "");
+                String url = o.optString("url", "");
+                if (!mime.startsWith("image/") && !url.matches("(?i).*\\.(jpe?g|png|webp|gif)$")) continue;
+                JSONArray pv = o.optJSONArray("previews");
+                String best = url;
+                if (pv != null) for (int j = 0; j < pv.length(); j++) {
+                    JSONObject p = pv.getJSONObject(j);
+                    if (p.optInt("width") >= 300) { best = p.optString("url", url); break; }
+                }
+                out.add(best);
+            }
+            return out;
+        }, cb);
+    }
+
+    /** Downloads a card's photo (uploads want the key and token in a header). */
+    public static void image(Context c, String url, Callback<android.graphics.Bitmap> cb) {
+        String key = key(c), token = token(c);
+        async(() -> {
+            HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+            conn.setRequestProperty("Authorization", "OAuth oauth_consumer_key=\"" + key + "\", oauth_token=\"" + token + "\"");
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(30000);
+            InputStream in = conn.getInputStream();
+            android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+            o.inSampleSize = 2;
+            android.graphics.Bitmap b = android.graphics.BitmapFactory.decodeStream(in, null, o);
+            in.close();
+            return b;
+        }, cb);
+    }
+
     /** A card's description, for its details. */
     public static void details(Context c, String cardId, Callback<String> cb) {
         String key = key(c), token = token(c);
