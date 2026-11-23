@@ -1,4 +1,4 @@
-package app.kyogram.keypad;
+package app.kyogram.ui;
 
 import android.content.Context;
 import android.graphics.Canvas;

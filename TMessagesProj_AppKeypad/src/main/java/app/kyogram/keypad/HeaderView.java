@@ -1,5 +1,6 @@
 package app.kyogram.keypad;
 
+import app.kyogram.ui.*;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Canvas;

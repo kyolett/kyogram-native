@@ -1,4 +1,4 @@
-package app.kyogram.keypad;
+package app.kyogram.ui;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
@@ -12,7 +12,10 @@ import android.text.StaticLayout;
 import android.text.TextPaint;
 import android.text.TextUtils;
 import android.text.style.ForegroundColorSpan;
+import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.View;
+import android.view.ViewConfiguration;
 
 import org.telegram.messenger.Emoji;
 import org.telegram.messenger.ImageReceiver;
@@ -110,6 +113,79 @@ public class ChatListView extends View {
 
     public void setListener(Listener l) {
         listener = l;
+    }
+
+    // ── touch (the phone app): drag to scroll with a fling, tap a row ──
+
+    public interface OnItemClick {
+        /** x is where in the row it was tapped (the check box is at its start). */
+        void onClick(Item item, float x);
+    }
+
+    private OnItemClick onItemClick;
+    private VelocityTracker velocity;
+    private float downY, downX, downScroll;
+    private boolean dragging;
+
+    public void setOnItemClick(OnItemClick l) {
+        onItemClick = l;
+        setClickable(true);
+    }
+
+    private float maxScroll() {
+        return Math.max(0, visible.size() * Style.px(ROW) - getHeight() + Style.px(40));
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent e) {
+        if (onItemClick == null) return super.onTouchEvent(e);
+        if (velocity == null) velocity = VelocityTracker.obtain();
+        velocity.addMovement(e);
+        int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                downY = e.getY();
+                downX = e.getX();
+                downScroll = scroll.v;
+                dragging = false;
+                scroll.to(scroll.v, true);
+                getParent().requestDisallowInterceptTouchEvent(true);
+                return true;
+            case MotionEvent.ACTION_MOVE:
+                float dy = e.getY() - downY;
+                if (!dragging && Math.abs(dy) > slop) dragging = true;
+                if (dragging) {
+                    float s = downScroll - dy, max = maxScroll();
+                    // * past the ends it gives a little, like a rubber band
+                    if (s < 0) s = s / 3f;
+                    if (s > max) s = max + (s - max) / 3f;
+                    scroll.to(s, true);
+                }
+                return true;
+            case MotionEvent.ACTION_UP:
+                if (dragging) {
+                    velocity.computeCurrentVelocity(1000);
+                    float target = scroll.v - velocity.getYVelocity() * .35f;
+                    scroll.to(Math.max(0, Math.min(maxScroll(), target)));
+                } else {
+                    float y = e.getY() - Style.px(6) + scroll.v;
+                    int i = (int) (y / Style.px(ROW));
+                    if (i >= 0 && i < visible.size()) {
+                        focus = i;
+                        moveFocus(0, false);
+                        onItemClick.onClick(visible.get(i), downX - Style.px(10));
+                    }
+                }
+                // fall through
+            case MotionEvent.ACTION_CANCEL:
+                if (velocity != null) {
+                    velocity.recycle();
+                    velocity = null;
+                }
+                dragging = false;
+                return true;
+        }
+        return true;
     }
 
     @Override

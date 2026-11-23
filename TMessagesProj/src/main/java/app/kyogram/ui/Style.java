@@ -1,4 +1,4 @@
-package app.kyogram.keypad;
+package app.kyogram.ui;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -87,7 +87,12 @@ public final class Style {
     }
 
     public static void init(Context context, int width, int height, int statusBarHeight) {
-        u = width / 540f;
+        init(context, width, height, statusBarHeight, width / 540f);
+    }
+
+    /** With a set scale: the phone app sizes things by its density (the prototype's 540 = 360dp). */
+    public static void init(Context context, int width, int height, int statusBarHeight, float unit) {
+        u = unit;
         statusBar = statusBarHeight;
         if (regular == null) {
             regular = font(context, "Inter-Regular.otf", Typeface.NORMAL);

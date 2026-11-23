@@ -1,5 +1,6 @@
 package app.kyogram.keypad;
 
+import app.kyogram.ui.*;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Context;

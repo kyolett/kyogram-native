@@ -2,6 +2,7 @@
 <resources>
     <string name="AppName">Kyogram</string>
     <string name="KyogramCare">Care</string>
+    <string name="KyogramTasks">Tasks</string>
     <string name="AppNameBeta">Telegram Beta</string>
     <string name="LanguageName">English</string>
     <string name="English">English</string>
