@@ -10930,6 +10930,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     @NonNull
     public ArrayList<TLRPC.Dialog> getDialogsArray(int currentAccount, int dialogsType, int folderId, boolean frozen) {
+        // * Kyogram: hidden chats are taken out of every list (app.kyogram.ui.Hidden)
+        return app.kyogram.ui.Hidden.filter(getDialogsArrayAll(currentAccount, dialogsType, folderId, frozen));
+    }
+
+    private ArrayList<TLRPC.Dialog> getDialogsArrayAll(int currentAccount, int dialogsType, int folderId, boolean frozen) {
         if (frozen && frozenDialogsList != null) {
             return frozenDialogsList;
         }

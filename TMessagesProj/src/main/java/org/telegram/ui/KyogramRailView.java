@@ -97,6 +97,7 @@ public class KyogramRailView extends View implements NotificationCenter.Notifica
         NotificationCenter.getInstance(account).removeObserver(this, NotificationCenter.updateInterfaces);
         NotificationCenter.getInstance(account).removeObserver(this, NotificationCenter.dialogFiltersUpdated);
         for (Slot s : slots) if (s.avatar != null) s.avatar.onDetachedFromWindow();
+        if (me != null && me.avatar != null) me.avatar.onDetachedFromWindow();
     }
 
     @Override
@@ -119,14 +120,17 @@ public class KyogramRailView extends View implements NotificationCenter.Notifica
         slots.clear();
         float y = AndroidUtilities.statusBarHeight + AndroidUtilities.dp(20);
         float step = AndroidUtilities.dp(60);
-        // * pinned chats: the "people" at the top of the rail
+        // * people: your recent one-on-one chats as round icons above the folders, the way Discord puts
+        // * direct messages at the top of its server list (railPeople.tsx); groups stay in the list
         int n = 0;
+        long self = UserConfig.getInstance(account).getClientUserId();
         for (TLRPC.Dialog d : mc.getDialogs(0)) {
-            if (!d.pinned || d instanceof TLRPC.TL_dialogFolder || n >= 8) continue;
+            if (d instanceof TLRPC.TL_dialogFolder || n >= 6 || !DialogObject.isUserDialog(d.id) || d.id == self || app.kyogram.ui.Hidden.isHidden(d.id)) continue;
             Slot s = new Slot();
             s.dialogId = d.id;
-            s.peer = DialogObject.isUserDialog(d.id) ? mc.getUser(d.id) : mc.getChat(-d.id);
-            if (s.peer == null) continue;
+            TLRPC.User u = mc.getUser(d.id);
+            if (u == null || u.bot || u.deleted) continue;
+            s.peer = u;
             s.unread = d.unread_count;
             s.avatar = new ImageReceiver(this);
             s.avatar.setRoundRadius(AndroidUtilities.dp(23));
@@ -157,8 +161,37 @@ public class KyogramRailView extends View implements NotificationCenter.Notifica
             s.y = y;
             slots.add(s);
         }
+        // * you, at the bottom: your avatar with your status dot (statusButton.tsx)
+        me = new Slot();
+        me.dialogId = self;
+        me.peer = mc.getUser(self);
+        if (me.peer != null) {
+            me.avatar = new ImageReceiver(this);
+            me.avatar.setRoundRadius(AndroidUtilities.dp(20));
+            me.drawable = new AvatarDrawable();
+            me.drawable.setInfo(me.peer);
+            me.avatar.setForUserOrChat(me.peer, me.drawable);
+            if (isAttachedToWindow()) me.avatar.onAttachedToWindow();
+        }
         placePill(true);
         invalidate();
+    }
+
+    private Slot me;
+
+    private float meY() {
+        return getHeight() - AndroidUtilities.dp(72);
+    }
+
+    /** Online, Idle, Do not disturb or Invisible (app.kyogram.ui.Presence). */
+    private void pickStatus() {
+        org.telegram.ui.ActionBar.AlertDialog.Builder b = new org.telegram.ui.ActionBar.AlertDialog.Builder(getContext());
+        b.setTitle("Status");
+        b.setItems(app.kyogram.ui.Presence.NAMES, (dialog, which) -> {
+            app.kyogram.ui.Presence.set(app.kyogram.ui.Presence.STATUSES[which]);
+            invalidate();
+        });
+        b.show();
     }
 
     private void placePill(boolean snap) {
@@ -177,6 +210,10 @@ public class KyogramRailView extends View implements NotificationCenter.Notifica
             return true;
         }
         if (e.getAction() == MotionEvent.ACTION_UP && Math.abs(e.getY() - downY) < AndroidUtilities.dp(10)) {
+            if (me != null && e.getY() >= meY() - AndroidUtilities.dp(6)) {
+                pickStatus();
+                return true;
+            }
             for (Slot s : slots) {
                 if (e.getY() >= s.y - AndroidUtilities.dp(6) && e.getY() < s.y + AndroidUtilities.dp(54)) {
                     tap(s);
@@ -192,7 +229,11 @@ public class KyogramRailView extends View implements NotificationCenter.Notifica
             selectedFolder = s.folderId;
             placePill(false);
             DialogsActivity dialogs = dialogs();
-            if (dialogs != null) dialogs.scrollToFolder(s.folderId);
+            if (dialogs != null) {
+                dialogs.scrollToFolder(s.folderId);
+                // * the server header: the folder's name over its channels (serverHeader.tsx)
+                if (dialogs.getActionBar() != null && !"All".equals(s.label)) dialogs.getActionBar().setTitle(s.label);
+            }
             return;
         }
         Bundle args = new Bundle();
@@ -255,6 +296,15 @@ public class KyogramRailView extends View implements NotificationCenter.Notifica
                 String name = TextUtils.ellipsize(s.label, label, w - AndroidUtilities.dp(16), TextUtils.TruncateAt.END).toString();
                 c.drawText(name, cx - label.measureText(name) / 2f, s.y + size + AndroidUtilities.dp(14), label);
             }
+        }
+        if (me != null && me.avatar != null) {
+            float ms = AndroidUtilities.dp(40), my = meY();
+            me.avatar.setImageCoords(cx - ms / 2f, my, ms, ms);
+            me.avatar.draw(c);
+            fill.setColor(Color.parseColor("#15121c"));
+            c.drawCircle(cx + ms / 2f - AndroidUtilities.dp(5), my + ms - AndroidUtilities.dp(5), AndroidUtilities.dp(8), fill);
+            fill.setColor(app.kyogram.ui.Presence.COLORS[app.kyogram.ui.Presence.index()]);
+            c.drawCircle(cx + ms / 2f - AndroidUtilities.dp(5), my + ms - AndroidUtilities.dp(5), AndroidUtilities.dp(5.5f), fill);
         }
     }
 }

@@ -483,9 +483,14 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private boolean openFoldersSelector(View anchor) {
         if (getContext() == null || getParentActivity() == null) return false;
         final ArrayList<MessagesController.DialogFilter> filters = getMessagesController().getDialogFilters();
-        if (filters == null || filters.size() <= 1) return false;
-
         final ItemOptions o = ItemOptions.makeOptions(this, anchor);
+        // * Kyogram: Hidden chats, from holding the Chats tab
+        o.add(R.drawable.msg_archive_hide, "Hidden chats", () -> presentFragment(new KyogramHiddenActivity()));
+        if (filters == null || filters.size() <= 1) {
+            o.show();
+            return true;
+        }
+
         for (int i = 0; i < filters.size(); i++) {
             final MessagesController.DialogFilter folder = filters.get(i);
             final ActionBarMenuSubItem folderItem = new ActionBarMenuSubItem(getParentActivity(), 2, false, false, getResourceProvider());

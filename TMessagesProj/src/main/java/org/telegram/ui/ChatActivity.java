@@ -1681,6 +1681,9 @@ public class ChatActivity extends BaseFragment implements
     private final static int chat_menu_search = -1;
     private final static int chat_menu_options = -2;
     private final static int clear_history = 15;
+    private final static int kyogram_hide = 9101;
+    private final static int kyogram_autoreply = 9102;
+    private final static int kyogram_autoreply_messages = 9103;
     private final static int delete_chat = 16;
     private final static int share_contact = 17;
     private final static int mute = 18;
@@ -3849,6 +3852,28 @@ public class ChatActivity extends BaseFragment implements
                         return;
                     }
                     showDialog(AlertsCreator.createTTLAlert(getParentActivity(), currentEncryptedChat, themeDelegate).create());
+                } else if (id == kyogram_autoreply) {
+                    app.kyogram.ui.AutoReply.toggle(currentAccount, dialog_id);
+                    boolean on = app.kyogram.ui.AutoReply.isOn(currentAccount, dialog_id);
+                    android.widget.Toast.makeText(getParentActivity(), on ? "Auto-reply on: each new message gets one of your replies (at most one every 20 s, 5 in a row)" : "Auto-reply off", android.widget.Toast.LENGTH_LONG).show();
+                } else if (id == kyogram_autoreply_messages) {
+                    android.widget.EditText box = new android.widget.EditText(getParentActivity());
+                    box.setText(android.text.TextUtils.join("\n", app.kyogram.ui.AutoReply.messages()));
+                    box.setTextColor(getThemedColor(Theme.key_dialogTextBlack));
+                    box.setMinLines(4);
+                    AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity(), themeDelegate);
+                    b.setTitle("Auto-reply messages (one per line)");
+                    b.setView(box);
+                    b.setPositiveButton("Save", (d, w) -> app.kyogram.ui.AutoReply.setMessages(new java.util.ArrayList<>(java.util.Arrays.asList(box.getText().toString().split("\n")))));
+                    b.setNeutralButton(app.kyogram.ui.AutoReply.inOrder() ? "In order" : "Random", (d, w) -> app.kyogram.ui.AutoReply.setInOrder(!app.kyogram.ui.AutoReply.inOrder()));
+                    b.setNegativeButton("Cancel", null);
+                    showDialog(b.create());
+                } else if (id == kyogram_hide) {
+                    boolean hide = !app.kyogram.ui.Hidden.isHidden(dialog_id);
+                    app.kyogram.ui.Hidden.setHidden(dialog_id, hide);
+                    getNotificationCenter().postNotificationName(NotificationCenter.dialogsNeedReload);
+                    android.widget.Toast.makeText(getParentActivity(), hide ? "Hidden. Find it in Hidden chats (hold the Chats tab)." : "Back in your chat list", android.widget.Toast.LENGTH_SHORT).show();
+                    if (hide) finishFragment();
                 } else if (id == clear_history || id == delete_chat || id == auto_delete_timer) {
                     if (getParentActivity() == null) {
                         return;
@@ -4421,6 +4446,14 @@ public class ChatActivity extends BaseFragment implements
             }
             if (currentUser != null && currentUser.self && getDialogId() != UserObject.VERIFY) {
                 headerItem.lazilyAddSubItem(add_shortcut, R.drawable.msg_home, LocaleController.getString(R.string.AddShortcut));
+            }
+            // * Kyogram: hide this chat from every list (Hidden chats, behind a PIN)
+            if (!isTopic && dialog_id != 0 && app.kyogram.ui.AutoReply.canUse(currentAccount, dialog_id) && (currentUser == null || !currentUser.bot)) {
+                headerItem.lazilyAddSubItem(kyogram_autoreply, R.drawable.msg_bot, app.kyogram.ui.AutoReply.isOn(currentAccount, dialog_id) ? "Auto-reply: on" : "Auto-reply: off");
+                headerItem.lazilyAddSubItem(kyogram_autoreply_messages, R.drawable.msg_edit, "Auto-reply messages…");
+            }
+            if (!isTopic && dialog_id != 0) {
+                headerItem.lazilyAddSubItem(kyogram_hide, R.drawable.msg_archive, app.kyogram.ui.Hidden.isHidden(dialog_id) ? "Unhide chat" : "Hide chat");
             }
             if (!isTopic && !ChatObject.isMonoForum(currentChat)) {
                 clearHistoryItem = headerItem.lazilyAddSubItem(clear_history, R.drawable.msg_clear,

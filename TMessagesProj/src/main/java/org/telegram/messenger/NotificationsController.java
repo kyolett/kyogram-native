@@ -4593,6 +4593,9 @@ public class NotificationsController extends BaseController implements Notificat
                 }
             }
 
+            if (app.kyogram.ui.Presence.dnd()) {
+                notifyDisabled = true; // * Kyogram: Do not disturb rings nothing
+            }
             if (notifyDisabled) {
                 vibrate = 0;
                 importance = 0;
