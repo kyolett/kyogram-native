@@ -127,9 +127,10 @@ public final class Style {
     // ── the colours behind everything ──────────────────────────────────────────
 
     /** CSS radial-gradient(circle at x% y%, color 0, transparent stop%) over the base colour. */
-    private static void paintWall(int w, int h) {
-        wall = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas c = new Canvas(wall);
+    /** The colours behind the glass, painted at a size (also the chats' wallpaper on the phone app). */
+    public static Bitmap wallBitmap(int w, int h) {
+        Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
         int[] pal = palette();
         BASE = pal[4];
         c.drawColor(BASE);
@@ -138,6 +139,11 @@ public final class Style {
         blob(c, w, h, .62f, .48f, pal[2], .32f);
         blob(c, w, h, .96f, .96f, pal[1], .46f);
         blob(c, w, h, .08f, .06f, pal[0], .38f);
+        return b;
+    }
+
+    private static void paintWall(int w, int h) {
+        wall = wallBitmap(w, h);
 
         // * the frost: small, blurred (CSS blur(18px)) and saturated (saturate(1.5)), scaled back up when drawn
         frostScale = 6f;

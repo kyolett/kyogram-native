@@ -420,16 +420,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
         instance = this;
         ApplicationLoader.postInitApplication();
-        // * Kyogram: starts in the night theme, the dark of Kyogram's Liquid glass (once; yours to change after)
-        try {
-            android.content.SharedPreferences kp = MessagesController.getGlobalMainSettings();
-            if (!kp.getBoolean("kyogram_night_set", false)) {
-                kp.edit().putBoolean("kyogram_night_set", true).apply();
-                Theme.ThemeInfo night = Theme.getTheme("Night");
-                if (night != null) Theme.applyTheme(night, true);
-            }
-        } catch (Throwable ignore) {
-        }
+        // * Kyogram: the Liquid glass look (its own theme, made once; yours to change after)
+        if (!BuildVars.isKeypadApp()) app.kyogram.ui.KyogramLook.applyOnce();
         AndroidUtilities.checkDisplaySize(this, getResources().getConfiguration());
         currentAccount = UserConfig.selectedAccount;
         if (BuildVars.DEBUG_VERSION || BuildVars.DEBUG_PRIVATE_VERSION) {
