@@ -109,7 +109,7 @@ public class KyogramCareActivity extends BaseFragment {
         LinearLayout hl = new LinearLayout(c);
         hl.setOrientation(LinearLayout.VERTICAL);
         hl.setGravity(Gravity.CENTER_VERTICAL);
-        hl.setPadding(px(10), 0, px(70), 0);
+        hl.setPadding(px(10), 0, px(124), 0);
         // * Care and Zalo OA side by side: a capsule whose pill glides between them
         segment = new SegmentView(c, "Care", "Zalo OA");
         sub = label(c, 14, Style.INK3, Style.regular);
@@ -135,6 +135,15 @@ public class KyogramCareActivity extends BaseFragment {
             });
         });
         header.addView(signOut, new FrameLayout.LayoutParams(px(64), -1, Gravity.RIGHT));
+        TextView lookup = label(c, 24, Style.INK2, Style.regular);
+        lookup.setText("⌕");
+        lookup.setGravity(Gravity.CENTER);
+        lookup.setOnClickListener(v -> {
+            if (segment != null && segment.picked() == 0) showLookup(null);
+        });
+        FrameLayout.LayoutParams lkp = new FrameLayout.LayoutParams(px(56), -1, Gravity.RIGHT);
+        lkp.rightMargin = px(58);
+        header.addView(lookup, lkp);
         FrameLayout.LayoutParams hlp = new FrameLayout.LayoutParams(-1, px(72));
         hlp.setMargins(px(14), AndroidUtilities.statusBarHeight + px(6), px(14), 0);
         careLayer = new FrameLayout(c);
@@ -415,6 +424,258 @@ public class KyogramCareActivity extends BaseFragment {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
         p.topMargin = px(top);
         return p;
+    }
+
+    // ── looking a customer up (by phone): purchases → invoice → a new ticket ──
+
+    private static final int REQUEST_PHOTO = 7301;
+    private java.io.File pendingPhoto;
+    private final ArrayList<java.io.File> formPhotos = new ArrayList<>();
+    private TextView photosLabel;
+
+    private void showLookup(String preset) {
+        Context c = getContext();
+        if (c == null) return;
+        LinearLayout col = panel(c);
+        TextView back = button(c, "‹ Tickets", false);
+        back.setOnClickListener(v -> closePanel());
+        col.addView(back, new LinearLayout.LayoutParams(-2, -2));
+        col.addView(para(c, "Look up a customer", 25, Style.INK, Style.display), lp(14));
+        EditText q = field(c, "Phone, name, product or IMEI", false);
+        q.setSingleLine(true);
+        if (preset != null) q.setText(preset);
+        col.addView(q, lp(12));
+        String[][] types = {{"phone", "Phone"}, {"name", "Name"}, {"product", "Product"}, {"imei", "IMEI"}, {"all", "All"}};
+        final String[] type = {"phone"};
+        LinearLayout typeRow = new LinearLayout(c);
+        ArrayList<TextView> chips = new ArrayList<>();
+        for (String[] t : types) {
+            TextView chip = label(c, 15, Style.INK, Style.semibold);
+            chip.setText(t[1]);
+            chip.setTag(t[0]);
+            chip.setPadding(px(12), px(7), px(12), px(7));
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, -2);
+            p.rightMargin = px(6);
+            typeRow.addView(chip, p);
+            chips.add(chip);
+            chip.setOnClickListener(v -> {
+                type[0] = (String) v.getTag();
+                String keep = status;
+                status = type[0];
+                paintChips(chips);
+                status = keep;
+            });
+        }
+        String keep = status;
+        status = "phone";
+        paintChips(chips);
+        status = keep;
+        col.addView(typeRow, lp(10));
+        TextView go = button(c, "Search", true);
+        col.addView(go, lp(12));
+        LinearLayout results = new LinearLayout(c);
+        results.setOrientation(LinearLayout.VERTICAL);
+        col.addView(results, lp(10));
+        go.setOnClickListener(v -> {
+            String text = q.getText().toString().trim();
+            if (text.isEmpty()) return;
+            if ("phone".equals(type[0]) && Care.findPhone(text) != null) text = Care.findPhone(text);
+            go.setText("Searching…");
+            AndroidUtilities.hideKeyboard(q);
+            Care.purchases(text, type[0], (list, error) -> {
+                go.setText("Search");
+                results.removeAllViews();
+                if (error != null) {
+                    results.addView(para(c, "signed-out".equals(error) ? "Signed out of DroidShop." : error, 17, Style.DANGER, Style.regular));
+                    return;
+                }
+                if (list.isEmpty()) {
+                    results.addView(para(c, "No purchases found.", 17, Style.INK2, Style.regular));
+                }
+                for (Care.Purchase p : list) {
+                    LinearLayout card = cardBox(c);
+                    card.addView(para(c, p.code + " · " + p.source.toUpperCase(), 18, Style.INK, Style.semibold));
+                    card.addView(para(c, p.customer + " · " + p.phone, 16, Style.INK2, Style.regular), lp(4));
+                    card.addView(para(c, p.date + (p.total.isEmpty() ? "" : " · " + p.total), 15, Style.INK3, Style.regular), lp(2));
+                    if (!TextUtils.isEmpty(p.note)) card.addView(para(c, p.note, 15, Style.INK2, Style.regular), lp(4));
+                    card.setOnClickListener(x -> showInvoice(p));
+                    results.addView(card, lp(8));
+                }
+            });
+        });
+        if (preset != null) go.performClick();
+    }
+
+    private LinearLayout cardBox(Context c) {
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(px(16), px(12), px(16), px(12));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Style.fg(18));
+        bg.setCornerRadius(px(18));
+        box.setBackground(bg);
+        return box;
+    }
+
+    private void showInvoice(Care.Purchase p) {
+        Context c = getContext();
+        if (c == null) return;
+        LinearLayout col = panel(c);
+        col.addView(para(c, p.code, 25, Style.INK, Style.display));
+        TextView loading = para(c, "Loading…", 17, Style.INK2, Style.regular);
+        col.addView(loading, lp(10));
+        Care.invoice(p, (inv, error) -> {
+            if (error != null) {
+                loading.setText(error);
+                return;
+            }
+            col.removeAllViews();
+            TextView back = button(c, "‹ Search", false);
+            back.setOnClickListener(v -> showLookup(p.phone));
+            col.addView(back, new LinearLayout.LayoutParams(-2, -2));
+            col.addView(para(c, inv.code + (inv.status != null ? " · " + inv.status : ""), 25, Style.INK, Style.display), lp(14));
+            col.addView(para(c, inv.customer + "\n" + inv.phone + (inv.address != null ? "\n" + inv.address : ""), 18, Style.INK, Style.semibold), lp(10));
+            col.addView(para(c, (inv.date != null ? inv.date : "") + (inv.total != null ? " · " + inv.total : ""), 16, Style.INK3, Style.regular), lp(4));
+            if (inv.description != null) col.addView(para(c, inv.description, 17, Style.INK2, Style.regular), lp(8));
+            for (Care.Item it : inv.items) {
+                LinearLayout card = cardBox(c);
+                card.addView(para(c, it.name, 18, Style.INK, Style.semibold));
+                if (it.serial != null) card.addView(para(c, "Serial " + it.serial, 15, Style.INK2, Style.regular), lp(4));
+                if (it.term != null) {
+                    Integer left = Care.warrantyDaysLeft(inv.date, it.term);
+                    String w = "Bảo hành " + it.term + (left == null ? "" : left >= 0 ? " · còn " + left + " ngày" : " · hết hạn");
+                    card.addView(para(c, w, 15, left == null ? Style.INK2 : left >= 0 ? Style.OK : Style.DANGER, Style.semibold), lp(4));
+                }
+                if (it.ticketStart != null) {
+                    TextView start = button(c, "Tiếp nhận bảo hành", true);
+                    start.setOnClickListener(v -> showTicketForm(inv, it, it.ticketStart));
+                    card.addView(start, lp(10));
+                }
+                col.addView(card, lp(10));
+            }
+            if (inv.ticketStart != null) {
+                TextView start = button(c, "Tiếp nhận bảo hành", true);
+                start.setOnClickListener(v -> showTicketForm(inv, null, inv.ticketStart));
+                col.addView(start, lp(14));
+            }
+        });
+    }
+
+    /** The new-ticket form: what's wrong, coverage, what's done with it, accessories, notes, photos. */
+    private void showTicketForm(Care.Invoice inv, Care.Item item, String start) {
+        Context c = getContext();
+        if (c == null) return;
+        formPhotos.clear();
+        LinearLayout col = panel(c);
+        col.addView(para(c, "Phiếu tiếp nhận", 25, Style.INK, Style.display));
+        col.addView(para(c, (item != null ? item.name + (item.serial != null ? " · " + item.serial : "") + "\n" : "") + inv.customer + " · " + inv.phone, 17, Style.INK2, Style.regular), lp(8));
+        EditText issue = field(c, "Mô tả lỗi", false);
+        issue.setMinLines(3);
+        col.addView(issue, lp(12));
+        Spinner coverage = spinner(c, Care.COVERAGE, 2);
+        col.addView(para(c, "Diện bảo hành", 15, Style.INK3, Style.semibold), lp(12));
+        col.addView(coverage, lp(4));
+        Spinner handling = spinner(c, Care.HANDLING, 0);
+        col.addView(para(c, "Hướng xử lý", 15, Style.INK3, Style.semibold), lp(12));
+        col.addView(handling, lp(4));
+        col.addView(para(c, "Phụ kiện", 15, Style.INK3, Style.semibold), lp(12));
+        ArrayList<CheckBox> accessories = new ArrayList<>();
+        for (String[] a : Care.ACCESSORIES) {
+            CheckBox box = new CheckBox(c);
+            box.setText(a[1]);
+            box.setTag(a[0]);
+            box.setTextColor(Style.INK);
+            accessories.add(box);
+            col.addView(box);
+        }
+        EditText accNote = field(c, "Ghi chú phụ kiện", false);
+        col.addView(accNote, lp(8));
+        EditText internal = field(c, "Ghi chú nội bộ", false);
+        col.addView(internal, lp(8));
+        EditText customer = field(c, "Ghi chú cho khách", false);
+        col.addView(customer, lp(8));
+        photosLabel = para(c, "No photos", 16, Style.INK2, Style.regular);
+        col.addView(photosLabel, lp(12));
+        TextView photo = button(c, "Take a photo", false);
+        photo.setOnClickListener(v -> takePhoto());
+        col.addView(photo, lp(6));
+        TextView save = button(c, "Tạo phiếu", true);
+        col.addView(save, lp(16));
+        TextView cancel = button(c, "Cancel", false);
+        cancel.setOnClickListener(v -> closePanel());
+        col.addView(cancel, lp(8));
+        save.setOnClickListener(v -> {
+            java.util.HashMap<String, Object> f = new java.util.HashMap<>();
+            if (issue.getText().length() > 0) f.put("issue_description", issue.getText().toString());
+            f.put("warranty_coverage", Care.COVERAGE[coverage.getSelectedItemPosition()][0]);
+            f.put("handling_direction", Care.HANDLING[handling.getSelectedItemPosition()][0]);
+            ArrayList<String> acc = new ArrayList<>();
+            for (CheckBox b : accessories) if (b.isChecked()) acc.add((String) b.getTag());
+            if (!acc.isEmpty()) f.put("accessories[]", acc);
+            if (accNote.getText().length() > 0) f.put("accessories_note", accNote.getText().toString());
+            if (internal.getText().length() > 0) f.put("internal_note", internal.getText().toString());
+            if (customer.getText().length() > 0) f.put("customer_note", customer.getText().toString());
+            if (start == null) {
+                f.put("customer_name", inv.customer);
+                f.put("customer_phone", inv.phone);
+            }
+            save.setText("Saving…");
+            Care.newTicket(start, f, new ArrayList<>(formPhotos), (code, error) -> {
+                if (error != null) {
+                    save.setText("Tạo phiếu");
+                    Toast.makeText(c, "signed-out".equals(error) ? "Signed out of DroidShop" : error, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                Toast.makeText(c, "Saved " + code, Toast.LENGTH_SHORT).show();
+                load();
+                if (!TextUtils.isEmpty(code)) openTicket(code);
+                else closePanel();
+            });
+        });
+    }
+
+    private Spinner spinner(Context c, String[][] options, int selected) {
+        Spinner s = new Spinner(c);
+        ArrayList<String> names = new ArrayList<>();
+        for (String[] o : options) names.add(o[1]);
+        ArrayAdapter<String> a = new ArrayAdapter<String>(c, android.R.layout.simple_spinner_item, names) {
+            @Override
+            public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                View v = super.getView(position, convertView, parent);
+                if (v instanceof TextView) ((TextView) v).setTextColor(Style.INK);
+                return v;
+            }
+        };
+        a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        s.setAdapter(a);
+        s.setSelection(selected);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Style.fg(20));
+        bg.setCornerRadius(px(18));
+        s.setBackground(bg);
+        return s;
+    }
+
+    private void takePhoto() {
+        try {
+            pendingPhoto = AndroidUtilities.generatePicturePath();
+            android.content.Intent intent = new android.content.Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            android.net.Uri uri = androidx.core.content.FileProvider.getUriForFile(getParentActivity(), org.telegram.messenger.ApplicationLoader.getApplicationId() + ".provider", pendingPhoto);
+            intent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, uri);
+            intent.addFlags(android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION | android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivityForResult(intent, REQUEST_PHOTO);
+        } catch (Exception e) {
+            Toast.makeText(getContext(), "No camera app found", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onActivityResultFragment(int requestCode, int resultCode, android.content.Intent data) {
+        if (requestCode == REQUEST_PHOTO && resultCode == android.app.Activity.RESULT_OK && pendingPhoto != null && pendingPhoto.exists()) {
+            formPhotos.add(pendingPhoto);
+            pendingPhoto = null;
+            if (photosLabel != null) photosLabel.setText(formPhotos.size() + (formPhotos.size() == 1 ? " photo" : " photos"));
+        }
     }
 
     private void showSignIn() {

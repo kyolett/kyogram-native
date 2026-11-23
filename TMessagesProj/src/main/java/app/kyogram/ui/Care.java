@@ -397,6 +397,232 @@ public final class Care {
         }, cb);
     }
 
+    // ── looking a customer up: purchases and invoices ──
+
+    public static final class Purchase {
+        public String source, code, path, date, customer, phone, note, total;
+    }
+
+    public static final class Item {
+        public String code, name, serial, term, quantity, total, ticketStart;
+    }
+
+    public static final class Invoice {
+        public String code, source, status, customer, phone, total, date, address, description, ticketStart;
+        public ArrayList<String[]> meta = new ArrayList<>();
+        public ArrayList<Item> items = new ArrayList<>();
+    }
+
+    /** A Vietnamese phone number in a message or field, as the site stores it (0xxxxxxxxx). */
+    public static String findPhone(String value) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:\\+?84|0)(\\d{9})(?!\\d)").matcher(value == null ? "" : value.replaceAll("[.\\s-]", ""));
+        return m.find() ? "0" + m.group(1) : null;
+    }
+
+    private static ArrayList<Map<String, Element>> table(Document doc, String mustHave) {
+        ArrayList<Map<String, Element>> rows = new ArrayList<>();
+        Element table = null;
+        for (Element t : doc.select("table")) {
+            for (Element th : t.select("th")) if (text(th).toUpperCase().contains(mustHave)) table = t;
+            if (table != null) break;
+        }
+        if (table == null) return rows;
+        ArrayList<String> headers = new ArrayList<>();
+        for (Element th : table.select("thead th, tr:first-child th")) headers.add(text(th).toUpperCase().replaceAll("[▼▲]", "").trim());
+        for (Element row : table.select("tbody tr")) {
+            Elements cells = row.select("td");
+            if (cells.isEmpty()) continue;
+            HashMap<String, Element> m = new HashMap<>();
+            for (int i = 0; i < headers.size() && i < cells.size(); i++) m.put(headers.get(i), cells.get(i));
+            rows.add(m);
+        }
+        return rows;
+    }
+
+    private static Element col(Map<String, Element> row, String header) {
+        for (Map.Entry<String, Element> e : row.entrySet()) if (e.getKey().contains(header)) return e.getValue();
+        return null;
+    }
+
+    private static String link(Element a) {
+        if (a == null) return null;
+        String href = a.absUrl("href");
+        if (href.isEmpty() || href.startsWith("javascript:")) return null;
+        return href;
+    }
+
+    /** Purchases, newest first. type: phone, name, product, imei or all. */
+    public static void purchases(String q, String type, Callback<ArrayList<Purchase>> cb) {
+        async(() -> {
+            HashMap<String, String> query = new HashMap<>();
+            query.put("type", type);
+            query.put("q", q);
+            ArrayList<Purchase> out = new ArrayList<>();
+            for (Map<String, Element> row : table(page("/search.php", query, null, false), "MÃ HÓA ĐƠN")) {
+                Purchase p = new Purchase();
+                Element src = col(row, "NGUỒN");
+                Element tag = src != null ? src.selectFirst(".tag") : null;
+                java.util.regex.Matcher m = tag != null ? java.util.regex.Pattern.compile("tag-(\\w+)").matcher(tag.className()) : null;
+                p.source = (m != null && m.find() ? m.group(1) : text(src)).toLowerCase();
+                Element code = col(row, "MÃ HÓA ĐƠN");
+                p.code = text(code);
+                p.path = code != null ? link(code.selectFirst("a")) : null;
+                p.date = text(col(row, "NGÀY"));
+                p.customer = text(col(row, "KHÁCH HÀNG"));
+                p.phone = text(col(row, "SĐT"));
+                p.note = text(col(row, "NỘI DUNG"));
+                p.total = text(col(row, "THÀNH TIỀN"));
+                out.add(p);
+            }
+            return out;
+        }, cb);
+    }
+
+    public static void invoice(Purchase purchase, Callback<Invoice> cb) {
+        async(() -> {
+            if (purchase.path == null) throw new Exception("This purchase has no page");
+            Document doc = page(purchase.path, null, null, false);
+            Invoice inv = new Invoice();
+            inv.code = purchase.code;
+            inv.source = purchase.source;
+            Element header = doc.selectFirst(".invoice-header .code");
+            StringBuilder ht = new StringBuilder();
+            if (header != null) for (TextNode t : header.textNodes()) ht.append(t.text()).append(' ');
+            String[] parts = ht.toString().replaceAll("\\s+", " ").trim().split(" - ", 2);
+            inv.phone = parts.length > 0 && !parts[0].isEmpty() ? parts[0] : purchase.phone;
+            inv.customer = parts.length > 1 ? parts[1] : purchase.customer;
+            Element status = doc.selectFirst(".invoice-header .tag:not(.tag-misa):not(.tag-kiotviet)");
+            inv.status = status != null ? text(status) : null;
+            Element total = doc.selectFirst(".invoice-header .right > div:last-child");
+            inv.total = total != null ? text(total) : purchase.total;
+            for (Element pair : doc.select(".invoice-meta > div")) {
+                String label = text(pair.selectFirst(".label"));
+                if (label.isEmpty()) continue;
+                String value = text(pair.selectFirst(".value"));
+                inv.meta.add(new String[]{label, value});
+                if (inv.date == null && (label.contains("Ngày bán") || label.contains("Ngày chứng từ") || label.contains("Ngày hạch toán"))) inv.date = value;
+                if (label.contains("Địa chỉ")) inv.address = value;
+            }
+            if (inv.date == null) inv.date = purchase.date;
+            for (Map<String, Element> row : table(doc, "MÃ HÀNG")) {
+                Item it = new Item();
+                it.code = text(col(row, "MÃ HÀNG"));
+                Element name = col(row, "TÊN HÀNG");
+                String n = "";
+                if (name != null) for (TextNode t : name.textNodes()) if (!t.text().trim().isEmpty()) { n = t.text().trim(); break; }
+                it.name = n.isEmpty() ? text(name) : n;
+                it.serial = name != null && name.selectFirst(".imei-badge") != null ? text(name.selectFirst(".imei-badge")) : null;
+                it.term = name != null && name.selectFirst(".warranty-note") != null ? text(name.selectFirst(".warranty-note")).replaceFirst("(?i)^Bảo hành:\\s*", "") : null;
+                it.quantity = text(col(row, "SỐ LƯỢNG"));
+                it.total = text(col(row, "THÀNH TIỀN"));
+                it.ticketStart = name != null ? link(name.selectFirst("a[href*=warranty_ticket_new]")) : null;
+                inv.items.add(it);
+            }
+            if ("misa".equals(purchase.source)) {
+                for (Element label : doc.select(".label")) if (text(label).matches("(?i).*Nội dung mua hàng.*")) inv.description = text(label.nextElementSibling());
+                if (inv.description == null) inv.description = purchase.note;
+            }
+            if (inv.items.isEmpty()) inv.ticketStart = link(doc.selectFirst("a[href*=warranty_ticket_new]"));
+            return inv;
+        }, cb);
+    }
+
+    /** Months in "6 tháng", "1 năm", "Toàn bộ sản phẩm:6 tháng". */
+    public static int termMonths(String term) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)\\s*(tháng|năm)", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(term == null ? "" : term);
+        if (!m.find()) return 0;
+        return Integer.parseInt(m.group(1)) * (m.group(2).toLowerCase().contains("năm") ? 12 : 1);
+    }
+
+    /** Days of warranty left (negative: ended), or null when unknown. */
+    public static Integer warrantyDaysLeft(String date, String term) {
+        int months = termMonths(term);
+        if (months == 0 || date == null || date.length() < 10) return null;
+        try {
+            String d = date.substring(0, 10);
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            if (d.matches("\\d{4}-\\d{2}-\\d{2}")) cal.set(Integer.parseInt(d.substring(0, 4)), Integer.parseInt(d.substring(5, 7)) - 1, Integer.parseInt(d.substring(8, 10)));
+            else if (d.matches("\\d{2}/\\d{2}/\\d{4}")) cal.set(Integer.parseInt(d.substring(6, 10)), Integer.parseInt(d.substring(3, 5)) - 1, Integer.parseInt(d.substring(0, 2)));
+            else return null;
+            cal.add(java.util.Calendar.MONTH, months);
+            return (int) Math.ceil((cal.getTimeInMillis() - System.currentTimeMillis()) / 86400e3);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ── a new warranty ticket: the site's own form, its values with yours over them ──
+
+    public static final String[][] COVERAGE = {{"covered", "Thuộc diện bảo hành"}, {"not_covered", "Không thuộc diện bảo hành"}, {"needs_inspection", "Cần kiểm tra thêm"}};
+    public static final String[][] HANDLING = {{"intake_check", "Tiếp nhận kiểm tra"}, {"onsite_repair", "Sửa chữa tại chỗ"}, {"send_to_manufacturer", "Gửi hãng bảo hành"}, {"replace_product", "Đổi sản phẩm mới"}, {"reject", "Từ chối tiếp nhận"}};
+    public static final String[][] ACCESSORIES = {{"hop_san_pham", "Hộp sản phẩm"}, {"hop_sac", "Hộp sạc"}, {"hop_bao_ve_kinh", "Hộp bảo vệ kính"}, {"tay_cam", "Tay cầm"}, {"sac", "Sạc"}, {"cap", "Cáp"}, {"phieu_bao_hanh", "Phiếu bảo hành"}, {"sach_huong_dan", "Sách hướng dẫn"}, {"kinh", "Kính"}, {"tui_bao_ve", "Túi bảo vệ"}};
+
+    /**
+     * Saves a new ticket (only from the "Tạo phiếu" button): the form at {@code start} (an invoice's
+     * "Tiếp nhận" link, or the blank form), with these fields and photos; returns the ticket's code.
+     */
+    public static void newTicket(String start, Map<String, Object> fields, ArrayList<java.io.File> photos, Callback<String> cb) {
+        async(() -> {
+            Document doc = page(start != null ? start : "/warranty_ticket_new.php", null, null, false);
+            Element form = null;
+            for (Element f : doc.select("form")) if (f.selectFirst("[name=customer_name]") != null) form = f;
+            if (form == null) throw new SignedOut();
+            String action = form.absUrl("action");
+            if (action.isEmpty()) action = doc.location();
+            Connection c = Jsoup.connect(action).cookies(cookies()).timeout(60000).followRedirects(true).ignoreHttpErrors(true)
+                    .userAgent("Mozilla/5.0 (Linux; Android) Kyogram").method(Connection.Method.POST);
+            java.util.HashSet<String> overridden = new java.util.HashSet<>(fields.keySet());
+            String fileField = "images[]";
+            boolean hasCreatedAt = false;
+            for (Element el : form.select("input, select, textarea")) {
+                String name = el.attr("name"), type = el.attr("type").toLowerCase();
+                if (name.isEmpty() || el.hasAttr("disabled")) continue;
+                if (type.equals("file")) { fileField = name; continue; }
+                if (type.equals("submit") || type.equals("button") || type.equals("reset") || type.equals("image")) continue;
+                if (overridden.contains(name)) continue;
+                // * the preset condition rows not asked for aren't sent, as when removed on the site
+                if (name.matches("^conditions\\[\\w+\\]\\[.*")) continue;
+                if ((type.equals("checkbox") || type.equals("radio")) && !el.hasAttr("checked")) continue;
+                String value;
+                if (el.tagName().equals("select")) {
+                    Element sel = el.selectFirst("option[selected]");
+                    if (sel == null) sel = el.selectFirst("option");
+                    value = sel != null ? sel.attr("value") : "";
+                } else if (el.tagName().equals("textarea")) {
+                    value = el.wholeText();
+                } else {
+                    value = el.attr("value");
+                }
+                if (name.equals("created_at")) hasCreatedAt = true;
+                if (name.equals("created_at") && value.isEmpty()) {
+                    value = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm", java.util.Locale.US).format(new java.util.Date());
+                }
+                c.data(name, value);
+            }
+            for (Map.Entry<String, Object> e : fields.entrySet()) {
+                if (e.getValue() instanceof java.util.List) {
+                    for (Object v : (java.util.List<?>) e.getValue()) c.data(e.getKey(), String.valueOf(v));
+                } else if (e.getValue() != null) {
+                    c.data(e.getKey(), String.valueOf(e.getValue()));
+                }
+            }
+            if (photos != null) {
+                for (java.io.File f : photos) c.data(fileField, f.getName(), new java.io.FileInputStream(f), "image/jpeg");
+            }
+            Connection.Response r = c.execute();
+            keepCookies(r.cookies());
+            Document after = r.parse();
+            String path = r.url().getPath();
+            if (path.endsWith("warranty_ticket_new.php")) {
+                StringBuilder errors = new StringBuilder();
+                for (Element e : after.select(".alert, .error, .errors, .alert-danger, .flash-error")) errors.append(text(e)).append('\n');
+                throw new Exception(errors.length() > 0 ? errors.toString().trim() : "DroidShop didn't save the ticket");
+            }
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("BH\\d{4,}").matcher(after.title() + " " + after.text());
+            return m.find() ? m.group() : "";
+        }, cb);
+    }
+
     // ── off the main thread ──
 
     private interface Work<T> {
