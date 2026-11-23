@@ -29,6 +29,13 @@ public final class KyogramLook {
         if (p.getBoolean(DONE, false)) return;
         p.edit().putBoolean(DONE, true).apply();
         try {
+            // * Telegram's own Liquid Glass (glass tab bar, glass message box and header, Android 13+) and
+            // * the frosted chat header and message panel, on
+            org.telegram.messenger.LiteMode.toggleFlag(org.telegram.messenger.LiteMode.FLAG_LIQUID_GLASS, true);
+            org.telegram.messenger.LiteMode.toggleFlag(org.telegram.messenger.LiteMode.FLAG_CHAT_BLUR, true);
+        } catch (Throwable ignore) {
+        }
+        try {
             Theme.ThemeInfo night = Theme.getTheme("Night");
             if (night != null) Theme.applyTheme(night, true);
             Theme.ThemeInfo made = Theme.createNewTheme("Kyogram Liquid");
@@ -68,6 +75,16 @@ public final class KyogramLook {
             Theme.refreshThemeColors();
         } catch (Throwable ignore) {
         }
+    }
+
+    private static android.graphics.drawable.Drawable listWall;
+
+    /** The glass colours behind the chat list (made once, stretched to the list). */
+    public static android.graphics.drawable.Drawable chatListBackground(android.content.Context c) {
+        if (listWall == null) {
+            listWall = new android.graphics.drawable.BitmapDrawable(c.getResources(), Style.wallBitmap(540, 1170));
+        }
+        return listWall;
     }
 
     private static void set(int key, int color) {
