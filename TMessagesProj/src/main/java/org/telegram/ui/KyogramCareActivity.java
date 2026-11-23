@@ -1,0 +1,581 @@
+package org.telegram.ui;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.text.InputType;
+import android.text.TextUtils;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.View;
+import android.view.inputmethod.EditorInfo;
+import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import org.telegram.messenger.AndroidUtilities;
+import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.ui.ActionBar.BaseFragment;
+
+import java.util.ArrayList;
+
+import app.kyogram.ui.Care;
+import app.kyogram.ui.SegmentView;
+import app.kyogram.ui.ChatListView;
+import app.kyogram.ui.GlassFrame;
+import app.kyogram.ui.Spring;
+import app.kyogram.ui.Style;
+
+/**
+ * Kyogram: the Care tab, DroidShop's warranty tickets (care.droidshop.vn) as on desktop Kyogram:
+ * sign in once, the tickets with their status, search by phone, code or serial, filter by status, and
+ * a ticket's page — its details, its history, change its status, add a note. Kyogram's glass and
+ * springs (app.kyogram.ui).
+ */
+public class KyogramCareActivity extends BaseFragment {
+
+    private final boolean hasMainTabs;
+    private FrameLayout root;
+    private ChatListView list;
+    private TextView sub, empty;
+    private EditText search;
+    private String status = "";
+    private final ArrayList<Care.Ticket> tickets = new ArrayList<>();
+    private ScrollView overlay;
+    private FrameLayout careLayer;
+    private KyogramZaloView zalo;
+    private SegmentView segment;
+    private boolean resumed;
+    private Spring overlaySpring;
+
+    public KyogramCareActivity(Bundle args) {
+        super(args);
+        hasMainTabs = args != null && args.getBoolean("hasMainTabs", false);
+    }
+
+    @Override
+    public ActionBar createActionBar(Context context) {
+        return null;
+    }
+
+    private int bottomInset() {
+        return hasMainTabs ? AndroidUtilities.dp(76) : AndroidUtilities.dp(12);
+    }
+
+    private int px(float v) {
+        return Math.round(Style.px(v));
+    }
+
+    @Override
+    public View createView(Context context) {
+        setHasOwnBackground(true);
+        Care.init(context);
+        root = new FrameLayout(context) {
+            @Override
+            protected void onSizeChanged(int w, int h, int ow, int oh) {
+                super.onSizeChanged(w, h, ow, oh);
+                if (w > 0 && h > 0 && (w != ow || h != oh)) post(() -> build());
+            }
+        };
+        root.setBackgroundColor(Color.parseColor("#15121c"));
+        fragmentView = root;
+        return root;
+    }
+
+    private void build() {
+        Context c = getContext();
+        if (c == null || root.getWidth() == 0) return;
+        Style.init(c, root.getWidth(), root.getHeight(), AndroidUtilities.statusBarHeight, AndroidUtilities.density * 360f / 540f);
+        root.removeAllViews();
+        overlay = null;
+        root.addView(new View(c) {
+            @Override
+            protected void onDraw(Canvas canvas) {
+                if (Style.wall != null) canvas.drawBitmap(Style.wall, 0, 0, null);
+            }
+        }, new FrameLayout.LayoutParams(-1, -1));
+
+        // * the header: Care, who's signed in, and a search field
+        GlassFrame header = new GlassFrame(c, 36);
+        LinearLayout hl = new LinearLayout(c);
+        hl.setOrientation(LinearLayout.VERTICAL);
+        hl.setGravity(Gravity.CENTER_VERTICAL);
+        hl.setPadding(px(10), 0, px(70), 0);
+        // * Care and Zalo OA side by side: a capsule whose pill glides between them
+        segment = new SegmentView(c, "Care", "Zalo OA");
+        sub = label(c, 14, Style.INK3, Style.regular);
+        sub.setText(Care.accountName().isEmpty() ? "DroidShop" : "DroidShop · " + Care.accountName());
+        hl.addView(segment, new LinearLayout.LayoutParams(px(250), px(40)));
+        LinearLayout.LayoutParams subp = new LinearLayout.LayoutParams(-2, -2);
+        subp.topMargin = px(3);
+        subp.leftMargin = px(8);
+        hl.addView(sub, subp);
+        header.addView(hl, new FrameLayout.LayoutParams(-1, -1));
+        TextView signOut = label(c, 24, Style.INK2, Style.regular);
+        signOut.setText("⏻");
+        signOut.setGravity(Gravity.CENTER);
+        signOut.setOnClickListener(v -> {
+            if (segment != null && segment.picked() == 1) {
+                app.kyogram.ui.ZaloOa.signOut();
+                zalo.setShown(true);
+                return;
+            }
+            Care.signOut((r, e) -> {
+            tickets.clear();
+            build();
+            });
+        });
+        header.addView(signOut, new FrameLayout.LayoutParams(px(64), -1, Gravity.RIGHT));
+        FrameLayout.LayoutParams hlp = new FrameLayout.LayoutParams(-1, px(72));
+        hlp.setMargins(px(14), AndroidUtilities.statusBarHeight + px(6), px(14), 0);
+        careLayer = new FrameLayout(c);
+        root.addView(careLayer, new FrameLayout.LayoutParams(-1, -1));
+        zalo = new KyogramZaloView(c, AndroidUtilities.statusBarHeight + px(86), bottomInset());
+        zalo.setVisibility(View.GONE);
+        root.addView(zalo, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(header, hlp);
+        final Spring layers = new Spring(0, 300, 30, (p, vel) -> {
+            careLayer.setAlpha(1 - Math.min(1, Math.max(0, p)));
+            careLayer.setTranslationX(-p * Style.px(60));
+            zalo.setAlpha(Math.min(1, Math.max(0, p)));
+            zalo.setTranslationX((1 - p) * Style.px(60));
+            careLayer.setVisibility(p > .99f ? View.GONE : View.VISIBLE);
+            zalo.setVisibility(p < .01f ? View.GONE : View.VISIBLE);
+        });
+        segment.setListener(i -> {
+            layers.to(i);
+            sub.setText(i == 1 ? "Kyogram x OA" : Care.accountName().isEmpty() ? "DroidShop" : "DroidShop · " + Care.accountName());
+            zalo.setShown(i == 1 && resumed);
+        });
+
+        GlassFrame sf = new GlassFrame(c, 25);
+        search = new EditText(c);
+        search.setBackground(null);
+        search.setTextColor(Style.INK);
+        search.setHintTextColor(Style.INK3);
+        search.setHint("Phone, ticket code or serial");
+        search.setTypeface(Style.medium);
+        search.setTextSize(TypedValue.COMPLEX_UNIT_PX, Style.px(19));
+        search.setSingleLine(true);
+        search.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+        search.setPadding(px(20), 0, px(20), 0);
+        search.setOnEditorActionListener((v, a, e) -> {
+            load();
+            AndroidUtilities.hideKeyboard(search);
+            return true;
+        });
+        sf.addView(search, new FrameLayout.LayoutParams(-1, -1));
+        FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(-1, px(50));
+        slp.setMargins(px(14), AndroidUtilities.statusBarHeight + px(86), px(14), 0);
+        careLayer.addView(sf, slp);
+
+        // * the statuses, as chips: the picked one is the accent
+        HorizontalScrollView chipsScroll = new HorizontalScrollView(c);
+        chipsScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout chips = new LinearLayout(c);
+        chips.setPadding(px(14), 0, px(14), 0);
+        chipsScroll.addView(chips);
+        ArrayList<TextView> chipViews = new ArrayList<>();
+        String[][] all = new String[Care.STATUSES.length + 1][];
+        all[0] = new String[]{"", "All", "gray"};
+        System.arraycopy(Care.STATUSES, 0, all, 1, Care.STATUSES.length);
+        for (String[] s : all) {
+            TextView chip = label(c, 16, Style.INK, Style.semibold);
+            chip.setText(s[1]);
+            chip.setPadding(px(16), px(9), px(16), px(9));
+            chip.setTag(s[0]);
+            chip.setOnClickListener(v -> {
+                status = (String) v.getTag();
+                paintChips(chipViews);
+                load();
+            });
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-2, -2);
+            p.rightMargin = px(8);
+            chips.addView(chip, p);
+            chipViews.add(chip);
+        }
+        paintChips(chipViews);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(-1, -2);
+        clp.topMargin = AndroidUtilities.statusBarHeight + px(146);
+        careLayer.addView(chipsScroll, clp);
+
+        list = new ChatListView(c, false);
+        list.setOnItemClick((item, x) -> {
+            for (Care.Ticket t : tickets) if (t.code.hashCode() == item.id) openTicket(t.code);
+        });
+        FrameLayout.LayoutParams llp = new FrameLayout.LayoutParams(-1, -1);
+        llp.topMargin = AndroidUtilities.statusBarHeight + px(196);
+        llp.bottomMargin = bottomInset();
+        careLayer.addView(list, llp);
+        empty = label(c, 19, Style.INK3, Style.regular);
+        empty.setSingleLine(false);
+        empty.setGravity(Gravity.CENTER);
+        empty.setPadding(px(40), 0, px(40), 0);
+        careLayer.addView(empty, new FrameLayout.LayoutParams(-1, -2, Gravity.CENTER_VERTICAL));
+
+        if (!Care.hasSession()) showSignIn();
+        else load();
+    }
+
+    private void paintChips(ArrayList<TextView> chips) {
+        for (TextView chip : chips) {
+            boolean on = status.equals(chip.getTag());
+            GradientDrawable bg = on ? new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{Style.ACCENT_HI, Style.ACCENT}) : new GradientDrawable();
+            if (!on) bg.setColor(Style.fg(26));
+            bg.setCornerRadius(px(18));
+            chip.setBackground(bg);
+            chip.setTextColor(on ? Color.WHITE : Style.INK);
+        }
+    }
+
+    private TextView label(Context c, float size, int color, android.graphics.Typeface face) {
+        TextView t = new TextView(c);
+        t.setTextColor(color);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_PX, Style.px(size));
+        t.setTypeface(face);
+        t.setIncludeFontPadding(false);
+        t.setSingleLine(true);
+        t.setEllipsize(TextUtils.TruncateAt.END);
+        return t;
+    }
+
+    private static int toneColor(String tone) {
+        switch (tone) {
+            case "blue": return Color.parseColor("#6aa8ff");
+            case "amber": return Style.WARN;
+            case "teal": return Color.parseColor("#5fd1c8");
+            case "green": return Style.OK;
+            case "red": return Style.DANGER;
+            default: return Style.INK2;
+        }
+    }
+
+    // ── the list ──
+
+    private void load() {
+        if (list == null) return;
+        empty.setText("Loading…");
+        empty.setAlpha(1);
+        Care.tickets(search.getText().toString().trim(), status, (result, error) -> {
+            if (list == null) return;
+            if ("signed-out".equals(error)) {
+                showSignIn();
+                return;
+            }
+            if (error != null) {
+                empty.setText("Couldn't load the tickets: " + error);
+                return;
+            }
+            sub.setText(Care.accountName().isEmpty() ? "DroidShop" : "DroidShop · " + Care.accountName());
+            tickets.clear();
+            tickets.addAll(result);
+            ArrayList<ChatListView.Item> items = new ArrayList<>();
+            for (Care.Ticket t : tickets) {
+                ChatListView.Item it = new ChatListView.Item();
+                it.id = t.code.hashCode();
+                it.name = t.code + " · " + t.product;
+                it.preview = t.customer + (TextUtils.isEmpty(t.date) ? "" : " · " + t.date);
+                it.chip = shortStatus(t.status);
+                int color = toneColor(Care.tone(t.status));
+                it.chipColor = color;
+                it.chipBg = Style.alpha(color, .18f);
+                items.add(it);
+            }
+            list.setItems(items, ChatListView.FROM_NONE, false, false);
+            empty.animate().alpha(items.isEmpty() ? 1 : 0).setDuration(200).start();
+            empty.setText("No tickets.");
+        });
+    }
+
+    private static String shortStatus(String s) {
+        if (s == null) return "";
+        int i = s.indexOf(" / ");
+        if (i > 0) s = s.substring(0, i);
+        i = s.indexOf(" - ");
+        if (i > 0) s = s.substring(0, i);
+        return s;
+    }
+
+    // ── panels over the list: the sign-in and a ticket ──
+
+    private LinearLayout panel(Context c) {
+        if (overlay != null) root.removeView(overlay);
+        overlay = new ScrollView(c);
+        overlay.setFillViewport(true);
+        FrameLayout wrap = new FrameLayout(c);
+        GlassFrame card = new GlassFrame(c, 32);
+        LinearLayout col = new LinearLayout(c);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setPadding(px(22), px(22), px(22), px(22));
+        card.addView(col, new FrameLayout.LayoutParams(-1, -2));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(-1, -2);
+        clp.setMargins(px(14), AndroidUtilities.statusBarHeight + px(14), px(14), bottomInset() + px(14));
+        wrap.addView(card, clp);
+        overlay.addView(wrap, new FrameLayout.LayoutParams(-1, -2));
+        root.addView(overlay, new FrameLayout.LayoutParams(-1, -1));
+        // * it springs up from below, the list sinks behind it
+        overlay.setAlpha(0);
+        final ScrollView o = overlay;
+        overlaySpring = new Spring(0, 330, 24, (p, vel) -> {
+            o.setAlpha(Math.min(1, Math.max(0, p) * 2));
+            o.setTranslationY((1 - p) * Style.px(70));
+            if (list != null) list.setAlpha(1 - .7f * Math.min(1, Math.max(0, p)));
+        });
+        overlaySpring.to(1);
+        return col;
+    }
+
+    private void closePanel() {
+        if (overlay == null) return;
+        final ScrollView o = overlay;
+        overlay = null;
+        new Spring(1, 330, 30, (p, vel) -> {
+            o.setAlpha(Math.max(0, p));
+            o.setTranslationY((1 - p) * Style.px(70));
+            if (list != null) list.setAlpha(1 - .7f * Math.max(0, p));
+            if (p <= .001f) root.removeView(o);
+        }).to(0);
+        AndroidUtilities.hideKeyboard(root);
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        resumed = true;
+        if (zalo != null && segment != null) zalo.setShown(segment.picked() == 1);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        resumed = false;
+        if (zalo != null) zalo.setShown(false);
+    }
+
+    @Override
+    public boolean onBackPressed(boolean invoked) {
+        if (zalo != null && segment != null && segment.picked() == 1 && zalo.hasPanel()) {
+            if (invoked) zalo.back();
+            return false;
+        }
+        if (overlay != null && Care.hasSession()) {
+            if (invoked) closePanel();
+            return false;
+        }
+        return super.onBackPressed(invoked);
+    }
+
+    private EditText field(Context c, String hint, boolean password) {
+        EditText e = new EditText(c);
+        e.setHint(hint);
+        e.setTextColor(Style.INK);
+        e.setHintTextColor(Style.INK3);
+        e.setTypeface(Style.regular);
+        e.setTextSize(TypedValue.COMPLEX_UNIT_PX, Style.px(19));
+        e.setInputType(password ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(Style.fg(20));
+        bg.setCornerRadius(px(18));
+        e.setBackground(bg);
+        e.setPadding(px(18), px(14), px(18), px(14));
+        return e;
+    }
+
+    private TextView button(Context c, String text, boolean primary) {
+        TextView t = label(c, 19, primary ? Color.WHITE : Style.INK, Style.bold);
+        t.setText(text);
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(px(18), px(14), px(18), px(14));
+        GradientDrawable bg = primary ? new GradientDrawable(GradientDrawable.Orientation.TL_BR, new int[]{Style.ACCENT_HI, Style.ACCENT}) : new GradientDrawable();
+        if (!primary) bg.setColor(Style.fg(26));
+        bg.setCornerRadius(px(24));
+        t.setBackground(bg);
+        return t;
+    }
+
+    private TextView para(Context c, String text, float size, int color, android.graphics.Typeface face) {
+        TextView t = label(c, size, color, face);
+        t.setSingleLine(false);
+        t.setEllipsize(null);
+        t.setLineSpacing(0, 1.15f);
+        t.setText(text);
+        return t;
+    }
+
+    private LinearLayout.LayoutParams lp(int top) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
+        p.topMargin = px(top);
+        return p;
+    }
+
+    private void showSignIn() {
+        Context c = getContext();
+        if (c == null) return;
+        LinearLayout col = panel(c);
+        col.addView(para(c, "Sign in to DroidShop", 25, Style.INK, Style.display));
+        col.addView(para(c, "Your care.droidshop.vn account. Kyogram keeps the sign-in on this phone only.", 16, Style.INK2, Style.regular), lp(10));
+        EditText user = field(c, "Username", false);
+        user.setSingleLine(true);
+        col.addView(user, lp(16));
+        EditText pass = field(c, "Password", true);
+        col.addView(pass, lp(10));
+        CheckBox remember = new CheckBox(c);
+        remember.setText("Stay signed in");
+        remember.setTextColor(Style.INK2);
+        remember.setChecked(true);
+        col.addView(remember, lp(10));
+        TextView go = button(c, "Sign in", true);
+        col.addView(go, lp(14));
+        go.setOnClickListener(v -> {
+            go.setText("Signing in…");
+            Care.signIn(user.getText().toString().trim(), pass.getText().toString(), remember.isChecked(), (name, error) -> {
+                if (error != null) {
+                    go.setText("Sign in");
+                    Toast.makeText(c, error, Toast.LENGTH_LONG).show();
+                    return;
+                }
+                closePanel();
+                load();
+            });
+        });
+    }
+
+    private void openTicket(String code) {
+        Context c = getContext();
+        if (c == null) return;
+        LinearLayout col = panel(c);
+        col.addView(para(c, code, 25, Style.INK, Style.display));
+        TextView loading = para(c, "Loading…", 17, Style.INK2, Style.regular);
+        col.addView(loading, lp(10));
+        Care.ticket(code, (d, error) -> {
+            if (error != null) {
+                loading.setText("signed-out".equals(error) ? "Signed out of DroidShop." : "Couldn't open the ticket: " + error);
+                return;
+            }
+            fillTicket(c, col, d);
+        });
+    }
+
+    private void fillTicket(Context c, LinearLayout col, Care.Detail d) {
+        col.removeAllViews();
+        TextView close = button(c, "‹ Tickets", false);
+        close.setOnClickListener(v -> closePanel());
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-2, -2);
+        col.addView(close, cp);
+        col.addView(para(c, d.code, 25, Style.INK, Style.display), lp(14));
+        TextView st = label(c, 16, toneColor(Care.tone(d.status)), Style.bold);
+        st.setText(d.status);
+        st.setPadding(px(12), px(6), px(12), px(6));
+        GradientDrawable sbg = new GradientDrawable();
+        sbg.setColor(Style.alpha(toneColor(Care.tone(d.status)), .18f));
+        sbg.setCornerRadius(px(12));
+        st.setBackground(sbg);
+        col.addView(st, new LinearLayout.LayoutParams(-2, -2));
+        col.addView(para(c, d.customer + (d.phone.isEmpty() ? "" : "\n" + d.phone), 19, Style.INK, Style.semibold), lp(12));
+        for (String[] m : d.meta) {
+            col.addView(para(c, m[0], 15, Style.INK3, Style.semibold), lp(12));
+            col.addView(para(c, m[1], 18, Style.INK, Style.regular), lp(2));
+        }
+        if (!d.issue.isEmpty()) {
+            col.addView(para(c, "Mô tả lỗi", 15, Style.INK3, Style.semibold), lp(12));
+            col.addView(para(c, d.issue, 18, Style.INK, Style.regular), lp(2));
+        }
+        if (!d.accessories.isEmpty()) {
+            col.addView(para(c, "Phụ kiện", 15, Style.INK3, Style.semibold), lp(12));
+            col.addView(para(c, TextUtils.join(" · ", d.accessories), 18, Style.INK, Style.regular), lp(2));
+        }
+
+        // * change the status
+        if (d.canChangeStatus && !d.statusOptions.isEmpty()) {
+            col.addView(para(c, "Change status", 21, Style.INK, Style.bold), lp(22));
+            Spinner pick = new Spinner(c);
+            ArrayList<String> names = new ArrayList<>();
+            int sel = 0;
+            for (int i = 0; i < d.statusOptions.size(); i++) {
+                names.add(d.statusOptions.get(i)[1]);
+                if (d.statusOptions.get(i)[0].equals(d.statusValue)) sel = i;
+            }
+            ArrayAdapter<String> a = new ArrayAdapter<String>(c, android.R.layout.simple_spinner_item, names) {
+                @Override
+                public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                    View v = super.getView(position, convertView, parent);
+                    if (v instanceof TextView) ((TextView) v).setTextColor(Style.INK);
+                    return v;
+                }
+            };
+            a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            pick.setAdapter(a);
+            pick.setSelection(sel);
+            GradientDrawable pbg = new GradientDrawable();
+            pbg.setColor(Style.fg(20));
+            pbg.setCornerRadius(px(18));
+            pick.setBackground(pbg);
+            col.addView(pick, lp(8));
+            EditText note = field(c, "Note (needed for Từ chối bảo hành)", false);
+            col.addView(note, lp(8));
+            TextView save = button(c, "Save status", true);
+            col.addView(save, lp(10));
+            save.setOnClickListener(v -> {
+                save.setText("Saving…");
+                Care.changeStatus(d.code, d.statusOptions.get(pick.getSelectedItemPosition())[0], note.getText().toString(), (nd, error) -> {
+                    if (error != null) {
+                        save.setText("Save status");
+                        Toast.makeText(c, error, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    fillTicket(c, col, nd);
+                    load();
+                });
+            });
+        }
+
+        // * add a note
+        if (d.canAddNote) {
+            col.addView(para(c, "Add a note", 21, Style.INK, Style.bold), lp(22));
+            EditText note = field(c, "Internal note", false);
+            col.addView(note, lp(8));
+            TextView add = button(c, "Add note", true);
+            col.addView(add, lp(10));
+            add.setOnClickListener(v -> {
+                String text = note.getText().toString().trim();
+                if (text.isEmpty()) return;
+                add.setText("Adding…");
+                Care.addNote(d.code, text, (nd, error) -> {
+                    if (error != null) {
+                        add.setText("Add note");
+                        Toast.makeText(c, error, Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    fillTicket(c, col, nd);
+                });
+            });
+        }
+
+        // * the history, newest as the site lists it
+        if (!d.timeline.isEmpty()) {
+            col.addView(para(c, "Tiến độ xử lý", 21, Style.INK, Style.bold), lp(22));
+            for (Care.Entry e : d.timeline) {
+                LinearLayout box = new LinearLayout(c);
+                box.setOrientation(LinearLayout.VERTICAL);
+                box.setPadding(px(16), px(12), px(16), px(12));
+                GradientDrawable bbg = new GradientDrawable();
+                bbg.setColor(Style.fg(e.note ? 18 : 10));
+                bbg.setCornerRadius(px(18));
+                box.setBackground(bbg);
+                box.addView(para(c, e.title, 18, Style.INK, Style.semibold));
+                box.addView(para(c, e.when + (e.who.isEmpty() ? "" : " · " + e.who), 15, Style.INK3, Style.regular), lp(4));
+                if (!TextUtils.isEmpty(e.body)) box.addView(para(c, e.body, 17, Style.INK2, Style.regular), lp(6));
+                col.addView(box, lp(8));
+            }
+        }
+    }
+}

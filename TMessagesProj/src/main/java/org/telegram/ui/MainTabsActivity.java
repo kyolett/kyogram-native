@@ -830,7 +830,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
         if (position == POSITION_CONTACTS) {
             Bundle args = new Bundle();
             args.putBoolean("hasMainTabs", true);
-            return new KyogramWebActivity(args);
+            return new KyogramCareActivity(args);
         } else if (position == POSITION_CALLS_OR_SETTINGS) {
             if (getUserConfig().showCallsTab) {
                 Bundle args = new Bundle();
