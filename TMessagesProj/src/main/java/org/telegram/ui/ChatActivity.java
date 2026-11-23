@@ -3860,17 +3860,7 @@ public class ChatActivity extends BaseFragment implements
                     boolean on = app.kyogram.ui.AutoReply.isOn(currentAccount, dialog_id);
                     android.widget.Toast.makeText(getParentActivity(), on ? "Auto-reply on: each new message gets one of your replies (at most one every 20 s, 5 in a row)" : "Auto-reply off", android.widget.Toast.LENGTH_LONG).show();
                 } else if (id == kyogram_autoreply_messages) {
-                    android.widget.EditText box = new android.widget.EditText(getParentActivity());
-                    box.setText(android.text.TextUtils.join("\n", app.kyogram.ui.AutoReply.messages()));
-                    box.setTextColor(getThemedColor(Theme.key_dialogTextBlack));
-                    box.setMinLines(4);
-                    AlertDialog.Builder b = new AlertDialog.Builder(getParentActivity(), themeDelegate);
-                    b.setTitle("Auto-reply messages (one per line)");
-                    b.setView(box);
-                    b.setPositiveButton("Save", (d, w) -> app.kyogram.ui.AutoReply.setMessages(new java.util.ArrayList<>(java.util.Arrays.asList(box.getText().toString().split("\n")))));
-                    b.setNeutralButton(app.kyogram.ui.AutoReply.inOrder() ? "In order" : "Random", (d, w) -> app.kyogram.ui.AutoReply.setInOrder(!app.kyogram.ui.AutoReply.inOrder()));
-                    b.setNegativeButton("Cancel", null);
-                    showDialog(b.create());
+                    KyogramSettingsActivity.editAutoReplyMessages(ChatActivity.this, themeDelegate);
                 } else if (id == kyogram_hide) {
                     boolean hide = !app.kyogram.ui.Hidden.isHidden(dialog_id);
                     app.kyogram.ui.Hidden.setHidden(dialog_id, hide);

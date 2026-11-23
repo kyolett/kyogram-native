@@ -65,6 +65,7 @@ public class KyogramZaloView extends FrameLayout {
         this.bottomInset = bottomInset;
         ZaloOa.init(context);
         list = new ChatListView(context, false);
+        list.inset = 22;
         list.setOnItemClick((item, x) -> {
             for (ZaloOa.Chat c : chats) if (c.convId.hashCode() == item.id) openChat(c);
         });

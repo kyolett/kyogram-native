@@ -262,6 +262,11 @@ public class AndroidUtilities {
 
     public static Typeface bold() {
         if (mediumTypeface == null) {
+            // * Kyogram: Customize Kyogram → Font
+            if (!BuildVars.isKeypadApp() && "inter".equals(app.kyogram.ui.KyogramPrefs.font())) {
+                mediumTypeface = getTypeface("fonts/Inter-SemiBold.otf");
+                if (mediumTypeface != null) return mediumTypeface;
+            }
             if (SharedConfig.useSystemBoldFont && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 mediumTypeface = Typeface.create(null, 500, false);
             } else {
@@ -3064,7 +3069,25 @@ public class AndroidUtilities {
     }
 
     public static boolean isTabletForce() {
-        return ApplicationLoader.applicationContext != null && ApplicationLoader.applicationContext.getResources().getBoolean(R.bool.isTablet);
+        return ApplicationLoader.applicationContext != null && (ApplicationLoader.applicationContext.getResources().getBoolean(R.bool.isTablet) || kyogramWide());
+    }
+
+    /**
+     * Kyogram: an unfolded foldable (the vivo X Fold's big screen is under 600dp wide, so Telegram would keep
+     * its phone layout) is laid out side by side, as desktop Kyogram's Discord layout.
+     */
+    public static boolean kyogramWide() {
+        if (ApplicationLoader.applicationContext == null || BuildVars.isKeypadApp()) return false;
+        try {
+            if (!app.kyogram.ui.KyogramPrefs.discord()) return false;
+        } catch (Throwable ignore) {
+        }
+        return ApplicationLoader.applicationContext.getResources().getConfiguration().smallestScreenWidthDp >= 520;
+    }
+
+    /** Kyogram: the screen may have changed while no activity was there to hear it. */
+    public static void kyogramRecheckTablet() {
+        isTablet = null;
     }
 
     public static boolean isTabletInternal() {
@@ -3127,6 +3150,10 @@ public class AndroidUtilities {
     }
 
     public static int getTabletLeftFragmentSize(final int fullWidth, final int insetLeft, final int insetRight) {
+        if (kyogramWide() && isSmallTablet()) {
+            // * Kyogram unfolded: the chat list narrower, so the chat keeps a phone's width
+            return insetLeft + Math.max(dp(240), Math.min(dp(320), (fullWidth - insetLeft - insetRight) * 40 / 100));
+        }
         return insetLeft + Math.max(dp(320), (fullWidth - insetLeft - insetRight) * 35 / 100);
     }
 

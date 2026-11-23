@@ -103,7 +103,8 @@ public class KyogramHiddenActivity extends BaseFragment {
     private void build() {
         Context c = getContext();
         if (c == null || root.getWidth() == 0) return;
-        Style.init(c, root.getWidth(), root.getHeight(), AndroidUtilities.statusBarHeight, AndroidUtilities.density * 360f / 540f);
+        Style.fromPrefs();
+        Style.init(c, root.getWidth(), root.getHeight(), AndroidUtilities.statusBarHeight, Style.phoneUnit());
         root.removeAllViews();
         root.addView(new View(c) {
             @Override
@@ -155,6 +156,8 @@ public class KyogramHiddenActivity extends BaseFragment {
         }
 
         list = new ChatListView(c, true);
+
+        list.inset = 22;
         list.setOnItemClick((item, x) -> {
             Bundle args = new Bundle();
             if (DialogObject.isUserDialog(item.id)) args.putLong("user_id", item.id);

@@ -16,6 +16,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -23,6 +24,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import org.telegram.messenger.AndroidUtilities;
+import org.telegram.messenger.R;
 import org.telegram.ui.ActionBar.ActionBar;
 import org.telegram.ui.ActionBar.BaseFragment;
 
@@ -94,7 +96,8 @@ public class KyogramCareActivity extends BaseFragment {
     private void build() {
         Context c = getContext();
         if (c == null || root.getWidth() == 0) return;
-        Style.init(c, root.getWidth(), root.getHeight(), AndroidUtilities.statusBarHeight, AndroidUtilities.density * 360f / 540f);
+        Style.fromPrefs();
+        Style.init(c, root.getWidth(), root.getHeight(), AndroidUtilities.statusBarHeight, Style.phoneUnit());
         root.removeAllViews();
         overlay = null;
         root.addView(new View(c) {
@@ -109,20 +112,20 @@ public class KyogramCareActivity extends BaseFragment {
         LinearLayout hl = new LinearLayout(c);
         hl.setOrientation(LinearLayout.VERTICAL);
         hl.setGravity(Gravity.CENTER_VERTICAL);
-        hl.setPadding(px(10), 0, px(124), 0);
-        // * Care and Zalo OA side by side: a capsule whose pill glides between them
+        hl.setPadding(px(10), px(8), px(120), px(8));
+        // * Care and Zalo OA side by side: a capsule whose pill glides between them, as wide as its words
         segment = new SegmentView(c, "Care", "Zalo OA");
+        android.text.TextPaint segText = Style.text(Style.semibold, 18, 0);
+        int segW = Math.round((Math.max(segText.measureText("Care"), segText.measureText("Zalo OA")) + Style.px(48)) * 2);
         sub = label(c, 14, Style.INK3, Style.regular);
         sub.setText(Care.accountName().isEmpty() ? "DroidShop" : "DroidShop · " + Care.accountName());
-        hl.addView(segment, new LinearLayout.LayoutParams(px(250), px(40)));
+        hl.addView(segment, new LinearLayout.LayoutParams(segW, px(42)));
         LinearLayout.LayoutParams subp = new LinearLayout.LayoutParams(-2, -2);
-        subp.topMargin = px(3);
-        subp.leftMargin = px(8);
+        subp.topMargin = px(6);
+        subp.leftMargin = px(12);
         hl.addView(sub, subp);
         header.addView(hl, new FrameLayout.LayoutParams(-1, -1));
-        TextView signOut = label(c, 24, Style.INK2, Style.regular);
-        signOut.setText("⏻");
-        signOut.setGravity(Gravity.CENTER);
+        ImageView signOut = headerIcon(c, R.drawable.msg_leave);
         signOut.setOnClickListener(v -> {
             if (segment != null && segment.picked() == 1) {
                 app.kyogram.ui.ZaloOa.signOut();
@@ -134,21 +137,21 @@ public class KyogramCareActivity extends BaseFragment {
             build();
             });
         });
-        header.addView(signOut, new FrameLayout.LayoutParams(px(64), -1, Gravity.RIGHT));
-        TextView lookup = label(c, 24, Style.INK2, Style.regular);
-        lookup.setText("⌕");
-        lookup.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams sop = new FrameLayout.LayoutParams(px(56), px(56), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        sop.rightMargin = px(8);
+        header.addView(signOut, sop);
+        ImageView lookup = headerIcon(c, R.drawable.msg_search);
         lookup.setOnClickListener(v -> {
             if (segment != null && segment.picked() == 0) showLookup(null);
         });
-        FrameLayout.LayoutParams lkp = new FrameLayout.LayoutParams(px(56), -1, Gravity.RIGHT);
-        lkp.rightMargin = px(58);
+        FrameLayout.LayoutParams lkp = new FrameLayout.LayoutParams(px(56), px(56), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        lkp.rightMargin = px(62);
         header.addView(lookup, lkp);
-        FrameLayout.LayoutParams hlp = new FrameLayout.LayoutParams(-1, px(72));
+        FrameLayout.LayoutParams hlp = new FrameLayout.LayoutParams(-1, px(80));
         hlp.setMargins(px(14), AndroidUtilities.statusBarHeight + px(6), px(14), 0);
         careLayer = new FrameLayout(c);
         root.addView(careLayer, new FrameLayout.LayoutParams(-1, -1));
-        zalo = new KyogramZaloView(c, AndroidUtilities.statusBarHeight + px(86), bottomInset());
+        zalo = new KyogramZaloView(c, AndroidUtilities.statusBarHeight + px(94), bottomInset());
         zalo.setVisibility(View.GONE);
         root.addView(zalo, new FrameLayout.LayoutParams(-1, -1));
         root.addView(header, hlp);
@@ -184,7 +187,7 @@ public class KyogramCareActivity extends BaseFragment {
         });
         sf.addView(search, new FrameLayout.LayoutParams(-1, -1));
         FrameLayout.LayoutParams slp = new FrameLayout.LayoutParams(-1, px(50));
-        slp.setMargins(px(14), AndroidUtilities.statusBarHeight + px(86), px(14), 0);
+        slp.setMargins(px(14), AndroidUtilities.statusBarHeight + px(98), px(14), 0);
         careLayer.addView(sf, slp);
 
         // * the statuses, as chips: the picked one is the accent
@@ -214,15 +217,17 @@ public class KyogramCareActivity extends BaseFragment {
         }
         paintChips(chipViews);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(-1, -2);
-        clp.topMargin = AndroidUtilities.statusBarHeight + px(146);
+        clp.topMargin = AndroidUtilities.statusBarHeight + px(160);
         careLayer.addView(chipsScroll, clp);
 
         list = new ChatListView(c, false);
+
+        list.inset = 22;
         list.setOnItemClick((item, x) -> {
             for (Care.Ticket t : tickets) if (t.code.hashCode() == item.id) openTicket(t.code);
         });
         FrameLayout.LayoutParams llp = new FrameLayout.LayoutParams(-1, -1);
-        llp.topMargin = AndroidUtilities.statusBarHeight + px(196);
+        llp.topMargin = AndroidUtilities.statusBarHeight + px(212);
         llp.bottomMargin = bottomInset();
         careLayer.addView(list, llp);
         empty = label(c, 19, Style.INK3, Style.regular);
@@ -233,6 +238,16 @@ public class KyogramCareActivity extends BaseFragment {
 
         if (!Care.hasSession()) showSignIn();
         else load();
+    }
+
+    /** A round glass button in the header, with one of Telegram's icons in the ink colour. */
+    private ImageView headerIcon(Context c, int res) {
+        ImageView v = new ImageView(c);
+        v.setImageResource(res);
+        v.setScaleType(ImageView.ScaleType.CENTER);
+        v.setColorFilter(new android.graphics.PorterDuffColorFilter(Style.INK2, android.graphics.PorterDuff.Mode.SRC_IN));
+        v.setBackground(org.telegram.ui.ActionBar.Theme.createSelectorDrawable(Style.fg(30), org.telegram.ui.ActionBar.Theme.RIPPLE_MASK_CIRCLE_20DP));
+        return v;
     }
 
     private void paintChips(ArrayList<TextView> chips) {

@@ -7,13 +7,14 @@ kyolett/kyogram-native --ref master -f app=standalone`.
 | Feature (desktop file) | Android | Where |
 | --- | --- | --- |
 | Kyogram icon, name | done | `TMessagesProj_AppStandalone/src/main/res/mipmap-*` |
-| Unfold frost (iPhone Duo) | done | `ui/Components/KyogramFoldReveal.java` |
-| Liquid glass look (glass.ts, look.ts) | done: Kyogram Liquid theme, Telegram Liquid Glass + chat blur on, glass colours behind the chat list | `app/kyogram/ui/KyogramLook.java`, `DialogsActivity` |
+| Unfold frost (iPhone Duo) | done: also when unfolding makes the activity anew; the X Fold's big screen is ~585dp | `ui/Components/KyogramFoldReveal.java`, `LaunchActivity` |
+| Liquid glass look (glass.ts, look.ts) | done: Kyogram Liquid theme written from Night/Day with see-through glass at the set clearness, the glass colours behind every screen (window) and in chats, Telegram Liquid Glass + chat blur, auto night off | `app/kyogram/ui/KyogramLook.java`, `LaunchActivity`, `DialogsActivity` |
+| Customize Kyogram (kyogramSettings.tsx) | done: glass on/off, Night/Day, colours, clear, frost, shine, liquid, chat wallpaper, Discord layout, font, status, Hidden, auto-reply, Care, Trello, wallpaper wipe | `ui/KyogramSettingsActivity.java`, `app/kyogram/ui/KyogramPrefs.java`, Settings → first row |
 | Shared glass / springs / pill | done | `app/kyogram/ui/{Style,Spring,GlassFrame,ChatListView,MenuView,SegmentView}` |
 | Shift tasks (shiftTasks.tsx, trello.ts) | done | `ui/KyogramTasksActivity.java`, `app/kyogram/ui/Trello.java` |
 | Care tickets (droidshop.ts) | done: list, search, filter, ticket page, status, notes | `ui/KyogramCareActivity.java`, `app/kyogram/ui/Care.java` |
 | Kyogram x OA (zaloOa.ts, desktop/zaloOa.js) | done: sign-in, chats, messages, reply, polling | `ui/KyogramZaloView.java`, `app/kyogram/ui/ZaloOa.java` |
-| Discord rail (look.ts, railPeople.tsx) | done: pinned chats + folders | `ui/KyogramRailView.java`, `LaunchActivity` |
+| Discord rail (look.ts, railPeople.tsx) | done: unfolded (≥520dp) is always side by side: rail, chat list, chat | `ui/KyogramRailView.java`, `LaunchActivity`, `AndroidUtilities.kyogramWide` |
 | Rail people = recent DMs (railPeople.tsx) | done | `ui/KyogramRailView.java` |
 | Server header (serverHeader.tsx) | done: folder name as the list's title | `ui/KyogramRailView.java` |
 | User panel + status (userPanel.tsx, statusButton.tsx, presence.ts) | done: avatar + dot in the rail; online/idle/dnd/invisible wired into MessagesController, NotificationsController | `app/kyogram/ui/Presence.java` |

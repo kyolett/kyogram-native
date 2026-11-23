@@ -44,7 +44,21 @@ public final class Style {
     /** Settings → Theme (Night / Day) and Glass tint (the desktop's palettes, _kyogramGlass.scss). */
     public static boolean day;
     public static String tint = "candy";
+    /** Customize Kyogram → Glass (the desktop's): how solid the glass is, its frost, its shine. */
+    public static float solid = .5f, blurPx = 24f, shine = 1f;
     private static String paintedFor;
+
+    public static void glass(float solidness, float blur, float shineAmount) {
+        solid = Math.max(0f, Math.min(1f, solidness));
+        blurPx = Math.max(0f, Math.min(60f, blur));
+        shine = Math.max(0f, Math.min(1f, shineAmount));
+    }
+
+    /** The glass's own colour at the set clearness. */
+    public static int glassTint() {
+        int a = Math.round(30 + solid * 220);
+        return day ? Color.argb(a, 255, 255, 255) : Color.argb(a, 40, 36, 60);
+    }
 
     /** Text-coloured ink at an alpha (white at night, near-black by day). */
     public static int fg(int alpha) {
@@ -82,6 +96,17 @@ public final class Style {
     private Style() {
     }
 
+    /** The phone app's unit: the prototype's sizes a little under the flip phone's, for a phone held close. */
+    public static float phoneUnit() {
+        return org.telegram.messenger.AndroidUtilities.density * .6f;
+    }
+
+    /** The phone app: Night or Day, the colours and the glass from Customize Kyogram. */
+    public static void fromPrefs() {
+        theme(KyogramPrefs.day(), KyogramPrefs.tint());
+        glass(KyogramPrefs.solid(), KyogramPrefs.blur(), KyogramPrefs.shine());
+    }
+
     public static float px(float prototypePx) {
         return prototypePx * u;
     }
@@ -101,7 +126,7 @@ public final class Style {
             bold = font(context, "Inter-Bold.otf", Typeface.BOLD);
             display = font(context, "InterDisplay-Bold.otf", Typeface.BOLD);
         }
-        String key = tint + day + width + "x" + height;
+        String key = tint + day + blurPx + width + "x" + height;
         if (wall == null || !key.equals(paintedFor)) {
             paintedFor = key;
             paintWall(width, height);
@@ -149,7 +174,7 @@ public final class Style {
         frostScale = 6f;
         Bitmap small = Bitmap.createScaledBitmap(wall, Math.max(1, (int) (w / frostScale)), Math.max(1, (int) (h / frostScale)), true);
         Bitmap mutable = small.copy(Bitmap.Config.ARGB_8888, true);
-        Utilities.stackBlurBitmap(mutable, Math.max(2, (int) (px(18) / frostScale * 1.6f)));
+        if (blurPx > 0) Utilities.stackBlurBitmap(mutable, Math.max(1, (int) (px(blurPx * .75f) / frostScale * 1.6f)));
         frost = Bitmap.createBitmap(mutable.getWidth(), mutable.getHeight(), Bitmap.Config.ARGB_8888);
         ColorMatrix m = new ColorMatrix();
         m.setSaturation(1.5f);
@@ -196,10 +221,10 @@ public final class Style {
             this.shadowColor = shadowColor;
             this.shadowY = shadowY;
             this.shadowBlur = shadowBlur;
-            tint.setColor(day ? Color.argb(140, 255, 255, 255) : Color.argb(140, 40, 36, 60));
+            tint.setColor(glassTint());
             rim.setStyle(Paint.Style.STROKE);
             rim.setColor(day ? Color.argb(204, 255, 255, 255) : Color.argb(56, 255, 255, 255));
-            top.setColor(Color.argb(102, 255, 255, 255));
+            top.setColor(Color.argb(Math.round(102 * shine), 255, 255, 255));
         }
 
         private void size(float w, float h, float radius) {
@@ -208,7 +233,7 @@ public final class Style {
             this.h = h;
             this.radius = radius;
             rect.set(0, 0, w, h);
-            sheen.setShader(new LinearGradient(0, 0, 0, h * .6f, Color.argb(day ? 153 : 41, 255, 255, 255), 0x00ffffff, Shader.TileMode.CLAMP));
+            sheen.setShader(new LinearGradient(0, 0, 0, h * .6f, Color.argb(Math.round((day ? 153 : 41) * shine), 255, 255, 255), 0x00ffffff, Shader.TileMode.CLAMP));
             rim.setStrokeWidth(px(1.5f));
             Path outer = new Path();
             outer.addRoundRect(rect, radius, radius, Path.Direction.CW);

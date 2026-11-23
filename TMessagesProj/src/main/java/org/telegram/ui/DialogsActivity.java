@@ -3942,7 +3942,7 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         ContentView contentView = new ContentView(context);
         fragmentView = contentView;
         // * Kyogram: the Liquid glass colours behind the chat list, with the glass bars over them
-        if (!BuildVars.isKeypadApp() && Theme.getActiveTheme() != null && Theme.getActiveTheme().name != null && Theme.getActiveTheme().name.startsWith("Kyogram Liquid")) {
+        if (!BuildVars.isKeypadApp() && app.kyogram.ui.KyogramLook.isOn()) {
             contentView.setBackground(app.kyogram.ui.KyogramLook.chatListBackground(context));
         }
 

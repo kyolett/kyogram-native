@@ -44,7 +44,7 @@ public class KyogramFoldReveal extends View implements SensorEventListener {
 
     private Bitmap frost;
     private float progress = 1f; // * 1 folded (all frost), 0 flat open (none)
-    private boolean useHinge;
+    private boolean useHinge, firstReading = true;
     private ValueAnimator animator;
     private SensorManager sensors;
 
@@ -104,7 +104,7 @@ public class KyogramFoldReveal extends View implements SensorEventListener {
 
     private final Runnable quiet = () -> {
         if (!useHinge || progress >= 1f) {
-            clearBy(450);
+            clearBy(650);
         }
     };
     private final Runnable late = () -> clearBy(250);
@@ -136,6 +136,14 @@ public class KyogramFoldReveal extends View implements SensorEventListener {
             return;
         }
         float angle = event.values[0]; // * 180 is flat open
+        if (firstReading) {
+            firstReading = false;
+            if (angle >= 172f) {
+                // * already open by the time the big screen came on: the frost lifts by itself, at its own pace
+                clearBy(650);
+                return;
+            }
+        }
         float p = Math.max(0f, Math.min(1f, (180f - angle) / 90f));
         progress = Math.min(progress, p); // * frost only ever lifts
         invalidate();
@@ -176,6 +184,12 @@ public class KyogramFoldReveal extends View implements SensorEventListener {
     protected void onDraw(Canvas canvas) {
         int w = getWidth(), h = getHeight();
         if (w == 0 || h == 0) {
+            return;
+        }
+        if (frost == null && (content.getWidth() == 0 || content.getHeight() == 0)) {
+            // * made anew on unfolding: wait for the new layout's first pass, fully frosted meanwhile
+            canvas.drawColor(0x66000000);
+            postInvalidateOnAnimation();
             return;
         }
         if (frost == null) {

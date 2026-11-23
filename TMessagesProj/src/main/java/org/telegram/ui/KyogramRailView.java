@@ -109,7 +109,8 @@ public class KyogramRailView extends View implements NotificationCenter.Notifica
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         super.onSizeChanged(w, h, ow, oh);
         if (w > 0 && h > 0) {
-            Style.init(getContext(), getRootView().getWidth(), getRootView().getHeight(), AndroidUtilities.statusBarHeight, AndroidUtilities.density * 360f / 540f);
+            Style.fromPrefs();
+            Style.init(getContext(), getRootView().getWidth(), getRootView().getHeight(), AndroidUtilities.statusBarHeight, Style.phoneUnit());
             reload();
         }
     }

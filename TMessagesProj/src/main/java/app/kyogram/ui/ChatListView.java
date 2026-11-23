@@ -69,6 +69,8 @@ public class ChatListView extends View {
     private final ArrayList<Item> visible = new ArrayList<>();
     private final HashMap<Long, Item> byId = new HashMap<>();
     private int focus;
+    /** Where the rows' content starts inside the pill (the prototype's 14; the phone app's text-only lists a little more). */
+    public float inset = 14;
     private final boolean avatars;
 
     private final Spring scroll, pillY;
@@ -434,9 +436,12 @@ public class ChatListView extends View {
         int save = c.save();
         c.translate(it.x, it.y);
         if (it.o < .999f) c.saveLayerAlpha(-Style.px(20), -Style.px(20), w + Style.px(20), h + Style.px(20), (int) (255 * it.o));
-        c.scale(it.scale, it.scale, w / 2f, h / 2f);
+        // * the row in focus grows a little; on a wide list, by the same few pixels as on a narrow one, so its
+        // * text stays inside the pill
+        float sc = 1 + (it.scale - 1) * Math.min(1f, Style.px(540) / Math.max(1f, w));
+        c.scale(sc, sc, w / 2f, h / 2f);
 
-        float pad = Style.px(14), gap = Style.px(16);
+        float pad = Style.px(inset), gap = Style.px(16);
         float x = pad;
 
         if (it.checkable) {

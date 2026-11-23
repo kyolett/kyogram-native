@@ -405,7 +405,18 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // * Kyogram: moving from the cover screen to the big one can make the activity anew (the density
+        // * changes): the opening half clears as on the iPhone Duo all the same, and the layout is looked at again
         kyogramSmallestWidth = getResources().getConfiguration().smallestScreenWidthDp;
+        if (!BuildVars.isKeypadApp()) {
+            AndroidUtilities.kyogramRecheckTablet();
+            if (savedInstanceState != null && kyogramLastWidth > 0 && kyogramLastWidth < KYOGRAM_FOLDED_MAX && kyogramSmallestWidth >= KYOGRAM_UNFOLDED_MIN) {
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (!isFinishing()) org.telegram.ui.Components.KyogramFoldReveal.show(this);
+                }, 32);
+            }
+        }
+        kyogramLastWidth = kyogramSmallestWidth;
         isActive = true;
         activeInstanceCount++;
         if (BuildVars.DEBUG_VERSION) {
@@ -459,6 +470,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
 
         }
         getWindow().setBackgroundDrawable(new ActivityWindowEmptyBackgroundDrawable());
+        // * Kyogram: the glass colours behind every screen, which the see-through glass shows
+        if (!BuildVars.isKeypadApp() && app.kyogram.ui.KyogramPrefs.glass()) {
+            getWindow().setBackgroundDrawable(app.kyogram.ui.KyogramLook.wallDrawable());
+        }
         getWindow().setFormat(PixelFormat.OPAQUE);
 
         flagSecureReason = new FlagSecureReason(getWindow(), () -> SharedConfig.passcodeHash.length() > 0 && !SharedConfig.allowScreenCapture);
@@ -971,10 +986,10 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     }
                     if (!tabletFullSize) {
                         // * Kyogram: rail | channel list | chat, as desktop Kyogram's Discord layout
-                        final int rail = kyogramRail != null ? dp(76) : 0;
+                        final int rail = kyogramRail != null && app.kyogram.ui.KyogramPrefs.discord() ? dp(68) : 0;
                         final int leftWidth = AndroidUtilities.getTabletLeftFragmentSize(width - rail, insets.left, insets.right);
                         if (kyogramRail != null) {
-                            kyogramRail.setVisibility(View.VISIBLE);
+                            kyogramRail.setVisibility(rail > 0 ? View.VISIBLE : View.GONE);
                             kyogramRail.measure(MeasureSpec.makeMeasureSpec(rail, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
                         }
                         actionBarLayout.getView().measure(MeasureSpec.makeMeasureSpec(leftWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY));
@@ -1001,7 +1016,7 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
                     final int width = getMeasuredWidth();
                     final int height = getMeasuredHeight();
                     if (!tabletFullSize) {
-                        final int rail = kyogramRail != null ? dp(76) : 0;
+                        final int rail = kyogramRail != null && app.kyogram.ui.KyogramPrefs.discord() ? dp(68) : 0;
                         final int leftWidth = AndroidUtilities.getTabletLeftFragmentSize(width - rail, insets.left, insets.right);
                         if (kyogramRail != null) kyogramRail.layout(0, 0, rail, height);
                         actionBarLayout.getView().layout(rail, 0, rail + actionBarLayout.getView().getMeasuredWidth(), actionBarLayout.getView().getMeasuredHeight());
@@ -1380,6 +1395,8 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     private boolean isTabletSplitMode() {
+        // * Kyogram: unfolded, always side by side (the Discord layout), whichever way the phone is held
+        if (AndroidUtilities.kyogramWide()) return !AndroidUtilities.isInMultiwindow;
         return !AndroidUtilities.isInMultiwindow && (!AndroidUtilities.isSmallTablet() || getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE);
     }
 
@@ -7397,14 +7414,18 @@ public class LaunchActivity extends BasePermissionsActivity implements INavigati
     }
 
     private int kyogramSmallestWidth = -1;
+    /** The last width seen by any instance: survives the activity being made anew on unfolding. */
+    private static int kyogramLastWidth = -1;
+    private static final int KYOGRAM_FOLDED_MAX = 500, KYOGRAM_UNFOLDED_MIN = 520;
 
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         // * Kyogram: from the cover screen to the big one, the opening half clears as on the iPhone Duo
-        if (kyogramSmallestWidth >= 0 && kyogramSmallestWidth < 600 && newConfig.smallestScreenWidthDp >= 600) {
+        if (!BuildVars.isKeypadApp() && kyogramSmallestWidth > 0 && kyogramSmallestWidth < KYOGRAM_FOLDED_MAX && newConfig.smallestScreenWidthDp >= KYOGRAM_UNFOLDED_MIN) {
             org.telegram.ui.Components.KyogramFoldReveal.show(this);
         }
         kyogramSmallestWidth = newConfig.smallestScreenWidthDp;
+        kyogramLastWidth = kyogramSmallestWidth;
         AndroidUtilities.checkDisplaySize(this, newConfig);
         orientationController.update();
         AndroidUtilities.setPreferredMaxRefreshRate(getWindow());

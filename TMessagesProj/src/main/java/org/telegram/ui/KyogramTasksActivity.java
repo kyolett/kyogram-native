@@ -95,7 +95,8 @@ public class KyogramTasksActivity extends BaseFragment {
     private void build() {
         Context c = getContext();
         if (c == null || root.getWidth() == 0) return;
-        Style.init(c, root.getWidth(), root.getHeight(), AndroidUtilities.statusBarHeight, AndroidUtilities.density * 360f / 540f);
+        Style.fromPrefs();
+        Style.init(c, root.getWidth(), root.getHeight(), AndroidUtilities.statusBarHeight, Style.phoneUnit());
         root.removeAllViews();
         root.addView(new View(c) {
             @Override
@@ -127,6 +128,7 @@ public class KyogramTasksActivity extends BaseFragment {
 
         // * the cards
         list = new ChatListView(c, false);
+        list.inset = 22;
         list.setOnItemClick((item, x) -> {
             if (x < Style.px(14 + 40 + 16)) toggle(item);
             else details(item);
